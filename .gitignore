@@ -3,22 +3,33 @@
 **/*.rs.bk
 Cargo.lock.orig
 
-# Node / frontend (apps/ pnpm workspace)
+# Node / frontend (pnpm workspace)
 node_modules/
-dist/
 .pnpm-store/
+
+# Build output
+dist/
+build/
 *.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
 
 # Environment / secrets
 .env
 .env.*
 !.env.example
-
-# Editor / OS
-.DS_Store
-.idea/
-.vscode/
-*.swp
 
 # gt worktree harness (agent runtime injections; contain tokens — never commit)
 /.claude/
