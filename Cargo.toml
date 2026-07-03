@@ -1,0 +1,44 @@
+[workspace]
+# Virtual manifest: the root defines no package of its own so the monorepo stays
+# modular and uncoupled. Rust crates live under `crates/`; the frontend apps
+# under `apps/` are a separate pnpm workspace and are intentionally not Cargo
+# members. New backend crates are picked up automatically by the glob below.
+resolver = "2"
+members = ["crates/*"]
+
+# Fields shared by every workspace crate. Members opt in with
+# `field.workspace = true` (e.g. `edition.workspace = true`).
+[workspace.package]
+edition = "2021"
+rust-version = "1.90"
+license = "MIT"
+authors = ["auth-app template"]
+repository = "https://github.com/templates-lab/auth-app"
+
+# Centralized dependency versions. Members reference these with
+# `some-dep.workspace = true` so the whole monorepo stays on one version.
+[workspace.dependencies]
+
+# Lints applied across the whole workspace. Members inherit them with
+# `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+todo = "warn"
+dbg_macro = "warn"
+
+# Compilation profiles shared by every crate.
+[profile.dev]
+# Faster incremental debug builds.
+debug = 1
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
