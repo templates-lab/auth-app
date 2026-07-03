@@ -1,0 +1,4 @@
+# Shared Clippy configuration for the workspace.
+# The minimum supported Rust version keeps Clippy from suggesting APIs newer
+# than the toolchain the workspace pins in `[workspace.package].rust-version`.
+msrv = "1.90"

@@ -1,0 +1,27 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.orig
+
+# Node / frontend (apps/ pnpm workspace)
+node_modules/
+dist/
+.pnpm-store/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# gt worktree harness (agent runtime injections; contain tokens — never commit)
+/.claude/
+/.gt-config/
+/.mcp.json
+/CLAUDE.md
