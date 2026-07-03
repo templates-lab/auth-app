@@ -1,0 +1,10 @@
+**/dist/**
+**/node_modules/**
+**/coverage/**
+pnpm-lock.yaml
+
+# Agent / harness files (not part of the app)
+.claude/
+.gt-config/
+.mcp.json
+CLAUDE.md
