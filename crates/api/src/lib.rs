@@ -20,8 +20,11 @@ pub fn router(health: HealthService) -> Router {
 }
 
 /// Readiness probe: `200 OK` when ready, `503 Service Unavailable` otherwise.
+///
+/// Awaits the application service, which in turn probes the live database, so a
+/// down or unreachable Postgres surfaces here as `503`.
 async fn health_handler(State(health): State<HealthService>) -> StatusCode {
-    match health.health().readiness {
+    match health.health().await.readiness {
         Readiness::Ready => StatusCode::OK,
         Readiness::NotReady => StatusCode::SERVICE_UNAVAILABLE,
     }

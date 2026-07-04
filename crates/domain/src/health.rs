@@ -26,7 +26,13 @@ pub struct Health {
 /// Implemented by an adapter in the `infrastructure` crate and consumed by the
 /// `application` crate. The domain only declares the contract — it never knows
 /// how readiness is actually determined.
+///
+/// The method is `async` because a real adapter probes an I/O-bound dependency
+/// (a Postgres `SELECT 1`, say). [`async_trait`](async_trait::async_trait) keeps
+/// the trait object-safe so the application layer can still hold it behind
+/// `Arc<dyn HealthCheck>`.
+#[async_trait::async_trait]
 pub trait HealthCheck: Send + Sync {
     /// Evaluate and return the current health of the service.
-    fn check(&self) -> Health;
+    async fn check(&self) -> Health;
 }
