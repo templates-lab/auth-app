@@ -31,9 +31,25 @@ api = { path = "crates/api" }
 contracts = { path = "crates/contracts" }
 module-demo = { path = "crates/module-demo" }
 
-# External dependencies. The domain crate deliberately references none of these.
+# External dependencies. The domain crate references no framework or driver;
+# `async-trait` is its one exception — an ergonomics macro (not a runtime) that
+# lets a port be `async` while staying object-safe behind `dyn`.
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+async-trait = "0.1"
+# Postgres access. `default-features = false` drops the bundled runtime/TLS pair
+# so we choose them explicitly: the Tokio runtime, rustls (ring) for TLS to
+# cloud databases, the Postgres driver, the migration runner, and `macros` (for
+# the `sqlx::migrate!` embed macro). We deliberately use only *runtime* queries,
+# never the compile-time `query!` macros, so the build never needs a live
+# DATABASE_URL or an offline `.sqlx` cache.
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-ring",
+    "postgres",
+    "migrate",
+    "macros",
+] }
 
 # Lints applied across the whole workspace. Members inherit them with
 # `[lints] workspace = true`.

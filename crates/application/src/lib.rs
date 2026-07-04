@@ -33,8 +33,11 @@ impl HealthService {
     }
 
     /// Report the current health of the service.
-    pub fn health(&self) -> Health {
-        self.check.check()
+    ///
+    /// `async` because the underlying port probes an I/O-bound dependency; the
+    /// service just forwards to the injected adapter.
+    pub async fn health(&self) -> Health {
+        self.check.check().await
     }
 }
 
@@ -45,18 +48,19 @@ mod tests {
 
     struct StubCheck(Readiness);
 
+    #[async_trait::async_trait]
     impl HealthCheck for StubCheck {
-        fn check(&self) -> Health {
+        async fn check(&self) -> Health {
             Health { readiness: self.0 }
         }
     }
 
-    #[test]
-    fn health_service_reports_the_ports_readiness() {
+    #[tokio::test]
+    async fn health_service_reports_the_ports_readiness() {
         let service = HealthService::new(Arc::new(StubCheck(Readiness::Ready)));
-        assert_eq!(service.health().readiness, Readiness::Ready);
+        assert_eq!(service.health().await.readiness, Readiness::Ready);
 
         let service = HealthService::new(Arc::new(StubCheck(Readiness::NotReady)));
-        assert_eq!(service.health().readiness, Readiness::NotReady);
+        assert_eq!(service.health().await.readiness, Readiness::NotReady);
     }
 }

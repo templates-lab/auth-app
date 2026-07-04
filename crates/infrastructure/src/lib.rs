@@ -1,21 +1,28 @@
 //! Infrastructure layer — adapters that implement domain ports.
 //!
-//! Depends on `domain` (for the port contracts) and, as the app grows, on
-//! external drivers (database, cache, ...). It never depends on `application`
-//! or `api`: dependencies point inward, toward the domain.
+//! Depends on `domain` (for the port contracts) and on external drivers
+//! (`sqlx` for Postgres). It never depends on `application` or `api`:
+//! dependencies point inward, toward the domain.
 
+use async_trait::async_trait;
 use domain::{Health, HealthCheck, Readiness};
+
+pub mod db;
+pub mod health;
+
+pub use db::{connect, run_migrations, PgConfig, PgConfigError, MIGRATOR};
+pub use health::PgHealthCheck;
 
 /// A trivial [`HealthCheck`] adapter that always reports the service ready.
 ///
-/// A real adapter would probe dependencies (database connectivity, pending
-/// migrations, ...); this skeleton keeps the wiring honest without pulling in a
-/// driver yet.
+/// A null adapter for tests and for delivery paths with no database dependency;
+/// production wiring uses [`PgHealthCheck`], which probes the live pool.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AlwaysReady;
 
+#[async_trait]
 impl HealthCheck for AlwaysReady {
-    fn check(&self) -> Health {
+    async fn check(&self) -> Health {
         Health {
             readiness: Readiness::Ready,
         }
@@ -26,8 +33,8 @@ impl HealthCheck for AlwaysReady {
 mod tests {
     use super::*;
 
-    #[test]
-    fn always_ready_reports_ready() {
-        assert_eq!(AlwaysReady.check().readiness, Readiness::Ready);
+    #[tokio::test]
+    async fn always_ready_reports_ready() {
+        assert_eq!(AlwaysReady.check().await.readiness, Readiness::Ready);
     }
 }

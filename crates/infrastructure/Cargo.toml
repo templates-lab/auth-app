@@ -12,8 +12,14 @@ publish = false
 workspace = true
 
 # The infrastructure layer implements the domain's ports (adapters). It depends
-# on `domain` (to know the port contracts) and, over time, on external drivers
-# (database, cache, ...). It never depends on `application` or `api`:
-# dependencies point inward.
+# on `domain` (to know the port contracts) and on external drivers — `sqlx` for
+# Postgres, `async-trait` to implement the async `HealthCheck` port. It never
+# depends on `application` or `api`: dependencies point inward.
 [dependencies]
 domain.workspace = true
+async-trait.workspace = true
+sqlx.workspace = true
+
+# Test-only: a Tokio runtime for `#[tokio::test]`.
+[dev-dependencies]
+tokio.workspace = true

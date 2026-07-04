@@ -12,7 +12,10 @@ publish = false
 workspace = true
 
 # The domain is the innermost layer of the hexagon: it declares the business
-# model and the ports (traits) that outer layers implement. It intentionally
-# has NO dependencies — no web framework (axum), no database driver (sqlx) —
-# so the core stays independent of delivery and infrastructure concerns.
+# model and the ports (traits) that outer layers implement. It takes no web
+# framework (axum) and no database driver (sqlx) — the core stays independent of
+# delivery and infrastructure concerns. `async-trait` is the sole exception: an
+# ergonomics macro (it compiles to boxed futures, pulls in no runtime) that lets
+# a port method be `async` while the trait stays object-safe behind `dyn`.
 [dependencies]
+async-trait.workspace = true

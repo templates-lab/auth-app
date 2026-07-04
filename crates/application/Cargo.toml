@@ -16,3 +16,9 @@ workspace = true
 # storage; it wires domain ports into application services.
 [dependencies]
 domain.workspace = true
+
+# Test-only: a stub port needs `async-trait` to implement the async `HealthCheck`
+# contract, and `tokio` provides the runtime for `#[tokio::test]`.
+[dev-dependencies]
+async-trait.workspace = true
+tokio.workspace = true
