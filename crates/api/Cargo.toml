@@ -1,0 +1,21 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# The API layer is the HTTP boundary. It depends on `application` (to invoke use
+# cases) and `domain` (for its types), plus `axum` for routing. It holds no
+# business logic and no storage concerns — it only translates HTTP to/from the
+# application layer.
+[dependencies]
+application.workspace = true
+domain.workspace = true
+axum.workspace = true

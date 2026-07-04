@@ -12,7 +12,12 @@ web frontend, deployable behind Traefik with Postgres.
 ├── packages/      Shared frontend packages (pnpm workspace)
 │   └── shared/    Framework-agnostic shared utilities (@auth-app/shared)
 ├── crates/        Rust backend (Cargo workspace, hexagonal architecture)
-│   └── xtask/     Workspace automation (`cargo xtask`)
+│   ├── domain/          Business model and ports — no framework deps
+│   ├── application/     Use cases orchestrating the domain
+│   ├── infrastructure/  Adapters implementing domain ports
+│   ├── api/             HTTP boundary (axum router)
+│   ├── server/          Composition root — the `server` binary
+│   └── xtask/           Workspace automation (`cargo xtask`)
 ├── infra/         Deployment
 │   ├── docker/    Dockerfiles
 │   └── traefik/   Traefik routing and TLS
@@ -64,4 +69,10 @@ cargo build          # build the Rust workspace
 cargo clippy         # lint
 cargo fmt            # format (rules in rustfmt.toml)
 cargo xtask help     # list workspace tasks
+cargo run -p server  # start the HTTP server
 ```
+
+The server binary is the composition root: it reads its configuration from the
+environment (`APP_HOST`, default `0.0.0.0`; `APP_PORT`, default `8080`), builds
+the infrastructure adapters, injects them into the application services, and
+serves the API router.

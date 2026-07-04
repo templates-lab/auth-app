@@ -1,0 +1,26 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# The server is the composition root — the ONLY crate that depends on every
+# layer. It loads config, builds infrastructure adapters, injects them into the
+# application services, hands those to the API router, and runs the HTTP server.
+[dependencies]
+api.workspace = true
+application.workspace = true
+infrastructure.workspace = true
+axum.workspace = true
+tokio.workspace = true
+
+[[bin]]
+name = "server"
+path = "src/main.rs"

@@ -18,6 +18,18 @@ repository = "https://github.com/templates-lab/auth-app"
 # Centralized dependency versions. Members reference these with
 # `some-dep.workspace = true` so the whole monorepo stays on one version.
 [workspace.dependencies]
+# Internal crates, wired as path dependencies. The dependency direction is
+# enforced by which of these each member opts into:
+#   api → application → domain     infrastructure → domain
+#   server (composition root) → api, application, infrastructure
+domain = { path = "crates/domain" }
+application = { path = "crates/application" }
+infrastructure = { path = "crates/infrastructure" }
+api = { path = "crates/api" }
+
+# External dependencies. The domain crate deliberately references none of these.
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 
 # Lints applied across the whole workspace. Members inherit them with
 # `[lints] workspace = true`.
