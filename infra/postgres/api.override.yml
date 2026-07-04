@@ -1,0 +1,34 @@
+# API ↔ Postgres wiring, kept out of the edge and database files so each owns one
+# concern. This is an OVERRIDE: it carries only the database-related additions to
+# the `api` service (which is fully defined in infra/traefik/docker-compose.yml)
+# and must be layered on top of both that file and infra/postgres/docker-compose.yml,
+# which declares the `backend` network this references:
+#
+#   docker compose \
+#     -f infra/traefik/docker-compose.yml \
+#     -f infra/postgres/docker-compose.yml \
+#     -f infra/postgres/api.override.yml \
+#     up
+#
+# Compose deep-merges the `api` service across files, so the API keeps its build,
+# labels and edge network and additionally gains the database dependency, the
+# connection string, and membership of the back-end network.
+name: auth-app-postgres
+
+services:
+  api:
+    # Hold the API back until Postgres reports healthy. Combined with the
+    # database's healthcheck, this satisfies "the API waits for a healthy
+    # Postgres before starting": the container is not started until pg_isready
+    # succeeds, and the app then fails fast if the pool cannot connect.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Connect as the least-privilege application role (NOT the superuser) over
+      # the private back-end network. sslmode=disable is appropriate for the
+      # in-cluster hop; a remote database should use sslmode=require.
+      DATABASE_URL: postgres://${APP_DB_USER:-authapp_app}:${APP_DB_PASSWORD:?set APP_DB_PASSWORD in your environment}@postgres:5432/${POSTGRES_DB:-authapp}?sslmode=disable
+    networks:
+      # Added to the API's existing edge network so it can reach `postgres`.
+      - backend
