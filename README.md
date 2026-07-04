@@ -8,9 +8,12 @@ web frontend, deployable behind Traefik with Postgres.
 ```
 .
 ├── apps/          Frontend applications (pnpm workspace)
-│   └── web/       Vite + React + TypeScript web app (@auth-app/web)
-├── packages/      Shared frontend packages (pnpm workspace)
-│   └── shared/    Framework-agnostic shared utilities (@auth-app/shared)
+│   └── web/       Vite + SolidJS admin shell (@auth-app/web)
+├── packages/      Shared + feature packages (pnpm workspace)
+│   ├── shared/            Framework-agnostic shared utilities (@auth-app/shared)
+│   ├── feature-kit/       Feature contract for the shell (@auth-app/feature-kit)
+│   ├── feature-dashboard/ Dashboard feature (@auth-app/feature-dashboard)
+│   └── feature-users/     Users feature (@auth-app/feature-users)
 ├── crates/        Rust backend (Cargo workspace, hexagonal architecture)
 │   ├── domain/          Business model and ports — no framework deps
 │   ├── application/     Use cases orchestrating the domain
@@ -39,6 +42,29 @@ package:
 
 Shared Rust conventions live at the root: compilation profiles and lints in
 `Cargo.toml`, formatting in `rustfmt.toml`, and Clippy config in `clippy.toml`.
+
+## Frontend architecture: an app shell composed of feature packages
+
+The web app (`@auth-app/web`) is a SolidJS **shell** — it owns the admin chrome
+(a responsive sidebar, header, and content area, in `apps/web/src/shell/`) and
+the router, but no product screens. Each product area is a self-contained
+**feature package** under `packages/` that exposes a `FeatureModule`:
+
+- `@auth-app/feature-kit` defines the contract: `FeatureModule` (the routes and
+  sidebar entries a feature contributes) plus the `defineFeature` helper.
+- `@auth-app/feature-dashboard` and `@auth-app/feature-users` are example
+  features. Each declares its own routes and navigation and depends only on
+  `feature-kit` and `shared` — never on another feature.
+
+The shell discovers features through a single registry
+(`apps/web/src/shell/registry.ts`): it mounts every feature's routes with
+`@solidjs/router` and derives the sidebar from their nav entries. **Adding a
+feature is additive** — create the package, add it as a dependency of
+`@auth-app/web`, and list it in the registry. No existing feature or layout
+code changes, satisfying the open/closed boundary between features.
+
+Feature packages ship Solid source (`.tsx`) consumed directly by the app's Vite
+build (`vite-plugin-solid`); only `shared` and `feature-kit` compile to `dist`.
 
 ## Requirements
 
