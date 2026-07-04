@@ -21,11 +21,15 @@ repository = "https://github.com/templates-lab/auth-app"
 # Internal crates, wired as path dependencies. The dependency direction is
 # enforced by which of these each member opts into:
 #   api → application → domain     infrastructure → domain
-#   server (composition root) → api, application, infrastructure
+#   server (composition root) → api, application, infrastructure, contracts, modules
+# `contracts` is the shared plugin contract; feature modules (e.g. `module-demo`)
+# implement it and are mounted by the server, never depending on one another.
 domain = { path = "crates/domain" }
 application = { path = "crates/application" }
 infrastructure = { path = "crates/infrastructure" }
 api = { path = "crates/api" }
+contracts = { path = "crates/contracts" }
+module-demo = { path = "crates/module-demo" }
 
 # External dependencies. The domain crate deliberately references none of these.
 axum = "0.8"
