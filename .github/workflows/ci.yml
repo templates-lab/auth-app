@@ -1,0 +1,125 @@
+name: CI
+
+# Lint + test + build for the auth-app monorepo. The pipeline is split into a
+# Rust `backend` job and a pnpm `frontend` job, and a `changes` job gates each
+# so a push that only touches one stack never compiles the other. Dependency
+# caches (cargo + pnpm) keep repeat runs fast.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref (e.g. a new push to an open PR).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Detect which stacks the diff touches so the heavy jobs below can be skipped
+  # when unaffected. On pull_request the diff is against the base branch; on
+  # push it is against the previous commit.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rustfmt.toml'
+              - 'clippy.toml'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'apps/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'tsconfig*.json'
+              - 'eslint.config.js'
+              - '.prettierrc.json'
+              - '.prettierignore'
+              - '.npmrc'
+              - '.github/workflows/ci.yml'
+
+  # Rust backend: format, lint, test, build across the whole Cargo workspace.
+  backend:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --workspace --all-targets --locked
+
+  # pnpm frontend: lint, prettier check, test, build across the pnpm workspace.
+  frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # action-setup reads the pinned pnpm version from package.json
+      # (packageManager) and must run before setup-node so the pnpm store cache
+      # can resolve.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm run lint
+      - name: Format check
+        run: pnpm run format:check
+      - name: Test
+        run: pnpm run test
+      - name: Build
+        run: pnpm run build
+
+  # Single required status check for branch protection: green when every
+  # affected job passed. Skipped stacks (unaffected) do not fail the gate.
+  ci:
+    if: always()
+    needs: [changes, backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate result
+        run: |
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "changes job did not succeed"; exit 1
+          fi
+          for stack in backend frontend; do
+            case "$stack" in
+              backend) result="${{ needs.backend.result }}" ;;
+              frontend) result="${{ needs.frontend.result }}" ;;
+            esac
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "$stack job $result"; exit 1
+            fi
+          done
+          echo "CI passed"
