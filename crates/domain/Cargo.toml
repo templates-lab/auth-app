@@ -1,0 +1,18 @@
+[package]
+name = "domain"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# The domain is the innermost layer of the hexagon: it declares the business
+# model and the ports (traits) that outer layers implement. It intentionally
+# has NO dependencies — no web framework (axum), no database driver (sqlx) —
+# so the core stays independent of delivery and infrastructure concerns.
+[dependencies]

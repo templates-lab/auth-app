@@ -1,0 +1,19 @@
+[package]
+name = "infrastructure"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# The infrastructure layer implements the domain's ports (adapters). It depends
+# on `domain` (to know the port contracts) and, over time, on external drivers
+# (database, cache, ...). It never depends on `application` or `api`:
+# dependencies point inward.
+[dependencies]
+domain.workspace = true
