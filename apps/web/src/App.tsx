@@ -1,41 +1,13 @@
-import { useState, type FormEvent } from "react";
-import { isValidEmail } from "@auth-app/shared";
+import { Router } from "@solidjs/router";
+import type { Component } from "solid-js";
+import { AdminLayout } from "./shell/AdminLayout";
+import { FeatureRoutes } from "./shell/routes";
 
 /**
- * Placeholder sign-in screen. It exists to prove the workspace wiring end to
- * end: the app consumes `@auth-app/shared`, typechecks, lints, and builds.
- * Real authentication flows land in follow-up beads.
+ * The application shell. It wraps every route in the admin layout and mounts
+ * the routes contributed by feature packages. It has no knowledge of any
+ * specific feature — features are discovered through the shell registry.
  */
-export function App() {
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState<string | null>(null);
-
-  const emailValid = email.length === 0 || isValidEmail(email);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (isValidEmail(email)) {
-      setSubmitted(email);
-    }
-  }
-
-  return (
-    <main>
-      <h1>Auth App</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          aria-invalid={!emailValid}
-        />
-        <button type="submit" disabled={!isValidEmail(email)}>
-          Continue
-        </button>
-      </form>
-      {submitted ? <p>Signed in as {submitted}</p> : null}
-    </main>
-  );
-}
+export const App: Component = () => {
+  return <Router root={AdminLayout}>{FeatureRoutes()}</Router>;
+};
