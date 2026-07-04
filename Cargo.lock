@@ -83,6 +83,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
 
 [[package]]
+name = "contracts"
+version = "0.1.0"
+dependencies = [
+ "axum",
+]
+
+[[package]]
 name = "domain"
 version = "0.1.0"
 
@@ -263,6 +270,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "module-demo"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "contracts",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -376,7 +391,9 @@ dependencies = [
  "api",
  "application",
  "axum",
+ "contracts",
  "infrastructure",
+ "module-demo",
  "tokio",
 ]
 
