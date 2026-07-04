@@ -6,12 +6,12 @@ middlewares (security headers, compression, rate limiting).
 
 ## Files
 
-| File | Role |
-| --- | --- |
-| `traefik.yml` | Static config: entry points, ACME resolver, providers. Read at startup. |
+| File                      | Role                                                                        |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `traefik.yml`             | Static config: entry points, ACME resolver, providers. Read at startup.     |
 | `dynamic/middlewares.yml` | Reusable middlewares referenced from labels as `<name>@file`. Hot-reloaded. |
-| `dynamic/tls.yml` | TLS options: minimum version, cipher suites, strict SNI. Hot-reloaded. |
-| `docker-compose.yml` | The edge stack — `traefik`, `api`, `web` — with the routing labels. |
+| `dynamic/tls.yml`         | TLS options: minimum version, cipher suites, strict SNI. Hot-reloaded.      |
+| `docker-compose.yml`      | The edge stack — `traefik`, `api`, `web` — with the routing labels.         |
 
 ## Routing
 
@@ -43,10 +43,10 @@ and persisted in the `letsencrypt` volume (`/letsencrypt/acme.json`).
 
 ## Environment
 
-| Variable | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `ACME_EMAIL` | yes | — | Registration/contact address on issued certificates. Startup fails if unset. |
-| `APP_DOMAIN` | no | `localhost` | Host the routers match. Use a real DNS name in production. |
+| Variable     | Required | Default     | Purpose                                                                      |
+| ------------ | -------- | ----------- | ---------------------------------------------------------------------------- |
+| `ACME_EMAIL` | yes      | —           | Registration/contact address on issued certificates. Startup fails if unset. |
+| `APP_DOMAIN` | no       | `localhost` | Host the routers match. Use a real DNS name in production.                   |
 
 ## Run
 

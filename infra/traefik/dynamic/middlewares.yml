@@ -8,16 +8,16 @@ http:
     # its Content-Security-Policy and CORS (a separate work item).
     security-headers:
       headers:
-        frameDeny: true                       # X-Frame-Options: DENY
-        contentTypeNosniff: true              # X-Content-Type-Options: nosniff
+        frameDeny: true # X-Frame-Options: DENY
+        contentTypeNosniff: true # X-Content-Type-Options: nosniff
         browserXssFilter: true
         referrerPolicy: "strict-origin-when-cross-origin"
         permissionsPolicy: "camera=(), microphone=(), geolocation=()"
-        stsSeconds: 31536000                  # HSTS: 1 year
+        stsSeconds: 31536000 # HSTS: 1 year
         stsIncludeSubdomains: true
         stsPreload: true
         customResponseHeaders:
-          Server: ""                          # strip server fingerprint
+          Server: "" # strip server fingerprint
           X-Powered-By: ""
 
     # gzip/brotli compression for compressible responses.
