@@ -1,0 +1,78 @@
+# Traefik v3 static configuration — the single entry point for the stack.
+#
+# Everything Traefik must know at startup lives here: entry points, the ACME
+# (Let's Encrypt) certificate resolver, and the providers it watches. Per-service
+# routing (which host/path maps to which container) is NOT here — it is
+# discovered from Docker labels — and the reusable middlewares come from the
+# file provider under ./dynamic.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# Entry points:
+#   web       :80   — plain HTTP, only ever used to redirect to HTTPS and to
+#                     answer the ACME HTTP-01 challenge.
+#   websecure :443  — TLS traffic; every router defaults to the letsencrypt
+#                     resolver so certificates are issued automatically.
+#   traefik   :8080 — internal-only, backs the container healthcheck (/ping).
+#                     Not published to the host.
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+  traefik:
+    address: ":8080"
+
+# Providers: Docker (routers/services from container labels) and the file
+# provider (reusable middlewares + TLS options under ./dynamic, hot-reloaded).
+# `exposedByDefault: false` keeps a container off the proxy until it opts in
+# with `traefik.enable=true`.
+providers:
+  docker:
+    exposedByDefault: false
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# Let's Encrypt. HTTP-01 is the default challenge and works with only ports
+# 80/443 reachable. For wildcard certificates, or when port 80 cannot be
+# exposed, switch to the DNS-01 block below and provide the DNS provider
+# credentials through the environment.
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # Placeholder; overridden at runtime by
+      # TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL (see compose).
+      email: "admin@example.com"
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+      # --- DNS-01 alternative: remove httpChallenge above and uncomment ---
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   resolvers:
+      #     - "1.1.1.1:53"
+
+# Health probe for the container healthcheck, bound to the internal entry point.
+ping:
+  entryPoint: traefik
+
+# The dashboard/API stays off by default; enable only behind authentication.
+api:
+  dashboard: false
+
+log:
+  level: INFO
+accessLog: {}

@@ -1,0 +1,85 @@
+# Traefik edge stack: the reverse proxy plus the routing labels that put the web
+# SPA on "/" and the API on "/api", both terminated with automatic Let's Encrypt
+# TLS. This file owns the Traefik configuration and the routing/middleware
+# wiring; the api/web images themselves come from the Dockerfiles work item
+# (infra/docker/*.Dockerfile). It runs standalone (`docker compose -f
+# infra/traefik/docker-compose.yml up`) and is also meant to be composed into
+# the full dev/prod stack via `include`.
+name: auth-app-edge
+
+networks:
+  edge:
+    name: auth-app-edge
+
+volumes:
+  letsencrypt:
+
+services:
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    environment:
+      # ACME registration address. Required — the stack refuses to start without
+      # it, so a real contact rides on every issued certificate.
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in your environment}
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - edge
+    volumes:
+      # Read-only Docker socket: how Traefik discovers routers from labels.
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "./dynamic:/etc/traefik/dynamic:ro"
+      - "letsencrypt:/letsencrypt"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8080"
+    networks:
+      - edge
+    expose:
+      - "8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=auth-app-edge"
+      # API router: Host + "/api" prefix, higher priority so it wins over the
+      # web catch-all. The api-chain middleware strips "/api", rate-limits,
+      # applies security headers and compresses.
+      - "traefik.http.routers.api.rule=Host(`${APP_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.routers.api.middlewares=api-chain@file"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    networks:
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=auth-app-edge"
+      # Web router: catch-all for the host, lowest priority so "/api" wins.
+      - "traefik.http.routers.web.rule=Host(`${APP_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.web.priority=1"
+      - "traefik.http.routers.web.middlewares=web-chain@file"
+      - "traefik.http.services.web.loadbalancer.server.port=80"
