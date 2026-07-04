@@ -1,0 +1,95 @@
+# Postgres stack: the application database with a persistent volume, a
+# healthcheck that gates dependent services, a least-privilege application role,
+# and an optional scheduled-backup sidecar.
+#
+# This file owns the database service and its backups. It runs standalone
+# (`docker compose -f infra/postgres/docker-compose.yml up -d postgres`) and is
+# meant to be composed into the full dev/prod stack via `include`, alongside the
+# Traefik edge (infra/traefik/docker-compose.yml). The API's dependency on a
+# healthy database lives in the sibling override `api.override.yml`, layered on
+# top of the edge stack so this file never has to know about the API image.
+#
+# Required environment (see README.md; belongs in the repo `.env`):
+#   POSTGRES_SUPERUSER_PASSWORD  bootstrap superuser password (admin only)
+#   APP_DB_PASSWORD              password for the least-privilege app role
+# Optional (shown with their defaults):
+#   POSTGRES_SUPERUSER=postgres  POSTGRES_DB=authapp  APP_DB_USER=authapp_app
+#   BACKUP_INTERVAL_SECONDS=86400  BACKUP_RETENTION=7
+name: auth-app-postgres
+
+networks:
+  # Private back-end network: the database is never published to the host or the
+  # edge network. Only services that join `backend` (the API, the backup
+  # sidecar) can reach it, by its service name `postgres`.
+  backend:
+    name: auth-app-backend
+
+volumes:
+  # Durable data directory — survives `docker compose down` (removed only by
+  # `down -v`). This is what makes the database persistent.
+  pgdata:
+  # Backup archives written by the scheduled-backup sidecar.
+  pgbackups:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # The bootstrap superuser. Used only for administration, migrations of the
+      # cluster itself, and backups — never by the application (see DATABASE_URL
+      # in api.override.yml, which connects as the app role).
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in your environment}
+      POSTGRES_DB: ${POSTGRES_DB:-authapp}
+      # Passed through to the init script (initdb/10-app-role.sh), which creates
+      # the least-privilege application role on first initialisation.
+      APP_DB_USER: ${APP_DB_USER:-authapp_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in your environment}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # First-init scripts. `docker-entrypoint-initdb.d` runs only when the data
+      # directory is empty, as the bootstrap superuser.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    # Internal only: reachable on the `backend` network, not published to the
+    # host. Use `docker compose exec postgres psql ...` for ad-hoc access.
+    expose:
+      - "5432"
+    networks:
+      - backend
+    healthcheck:
+      # `pg_isready` reports whether the server is accepting connections. This is
+      # the condition dependent services wait on (condition: service_healthy).
+      # start_period covers the first-init window (initdb + init scripts).
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres-backup:
+    # Scheduled logical backups (pg_dump custom-format), pruned to a retention
+    # count. Opt-in: enable with `--profile backup`. Runs pg_dump on an interval
+    # against the healthy database and writes archives to the `pgbackups` volume.
+    image: postgres:16-alpine
+    profiles: ["backup"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # libpq connection settings for pg_dump/pg_restore. A logical dump is taken
+      # as the superuser so it captures the full schema regardless of ownership.
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in your environment}
+      PGDATABASE: ${POSTGRES_DB:-authapp}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION: ${BACKUP_RETENTION:-7}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - pgbackups:/backups
+      - ./scripts:/scripts:ro
+    networks:
+      - backend
+    entrypoint: ["/scripts/backup-scheduler.sh"]
