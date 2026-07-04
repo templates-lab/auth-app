@@ -1,0 +1,56 @@
+# Reusable middlewares, loaded by the file provider and referenced from Docker
+# labels as "<name>@file". Defining them once here keeps the per-service labels
+# short and the edge security posture in a single reviewable place.
+http:
+  middlewares:
+    # Security response headers applied to every route. Transport- and
+    # framing-level headers belong at the edge; the backend keeps ownership of
+    # its Content-Security-Policy and CORS (a separate work item).
+    security-headers:
+      headers:
+        frameDeny: true                       # X-Frame-Options: DENY
+        contentTypeNosniff: true              # X-Content-Type-Options: nosniff
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+        stsSeconds: 31536000                  # HSTS: 1 year
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customResponseHeaders:
+          Server: ""                          # strip server fingerprint
+          X-Powered-By: ""
+
+    # gzip/brotli compression for compressible responses.
+    compression:
+      compress: {}
+
+    # Edge rate limit for the API: ~50 req/s sustained per client IP, bursting
+    # to 100. Tune per deployment. App-level limits on sensitive endpoints
+    # (login, webhooks) are a separate, finer-grained concern.
+    api-ratelimit:
+      rateLimit:
+        average: 50
+        period: 1s
+        burst: 100
+
+    # Strip the "/api" prefix before the request reaches the backend, so the
+    # Rust service stays prefix-agnostic (it serves "/health", not
+    # "/api/health").
+    api-strip:
+      stripPrefix:
+        prefixes:
+          - "/api"
+
+    # Composed chains the routers reference — one label instead of four.
+    api-chain:
+      chain:
+        middlewares:
+          - api-strip
+          - api-ratelimit
+          - security-headers
+          - compression
+    web-chain:
+      chain:
+        middlewares:
+          - security-headers
+          - compression
