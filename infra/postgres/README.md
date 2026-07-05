@@ -27,15 +27,15 @@ infra/postgres/
 All settings come from the environment (put them in the repo `.env`). Two
 secrets are **required** — the stack refuses to start without them:
 
-| Variable | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `POSTGRES_SUPERUSER_PASSWORD` | yes | — | Bootstrap superuser password. Admin/backups only; the app never uses it. |
-| `APP_DB_PASSWORD` | yes | — | Password for the least-privilege application role. |
-| `POSTGRES_SUPERUSER` | no | `postgres` | Bootstrap superuser name. |
-| `POSTGRES_DB` | no | `authapp` | Application database name. |
-| `APP_DB_USER` | no | `authapp_app` | Least-privilege application role name. |
-| `BACKUP_INTERVAL_SECONDS` | no | `86400` | Seconds between scheduled backups (default: daily). |
-| `BACKUP_RETENTION` | no | `7` | Number of recent archives to keep. |
+| Variable                      | Required | Default       | Purpose                                                                  |
+| ----------------------------- | -------- | ------------- | ------------------------------------------------------------------------ |
+| `POSTGRES_SUPERUSER_PASSWORD` | yes      | —             | Bootstrap superuser password. Admin/backups only; the app never uses it. |
+| `APP_DB_PASSWORD`             | yes      | —             | Password for the least-privilege application role.                       |
+| `POSTGRES_SUPERUSER`          | no       | `postgres`    | Bootstrap superuser name.                                                |
+| `POSTGRES_DB`                 | no       | `authapp`     | Application database name.                                               |
+| `APP_DB_USER`                 | no       | `authapp_app` | Least-privilege application role name.                                   |
+| `BACKUP_INTERVAL_SECONDS`     | no       | `86400`       | Seconds between scheduled backups (default: daily).                      |
+| `BACKUP_RETENTION`            | no       | `7`           | Number of recent archives to keep.                                       |
 
 The API reads `DATABASE_URL` (assembled in `api.override.yml`) plus the pool
 tuning knobs the store crate understands: `DATABASE_MAX_CONNECTIONS`,
