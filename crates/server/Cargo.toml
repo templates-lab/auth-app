@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 api.workspace = true
 application.workspace = true
+domain.workspace = true
 infrastructure.workspace = true
 contracts.workspace = true
 module-demo.workspace = true

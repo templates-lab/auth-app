@@ -102,3 +102,51 @@ The server binary is the composition root: it reads its configuration from the
 environment (`APP_HOST`, default `0.0.0.0`; `APP_PORT`, default `8080`), builds
 the infrastructure adapters, injects them into the application services, and
 serves the API router.
+
+## Admin authentication
+
+The backend ships an administrator login built through the hexagonal layers:
+`POST /auth/login` verifies an email/password pair with **argon2id** (OWASP cost
+parameters by default), a **constant-work** path so a nonexistent account and a
+wrong password are indistinguishable by response or timing, and **progressive
+lockout** applied independently per account and per client IP.
+
+```sh
+curl -X POST http://localhost:8080/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@example.com","password":"..."}'
+# 200 {"admin_id":"..."} on success
+# 401 {"error":"invalid_credentials"} for a wrong password OR unknown account
+# 429 {"error":"too_many_attempts"} (+ Retry-After) when locked out
+```
+
+### Bootstrapping the first admin
+
+No password is ever committed to the repository. The first administrator is
+seeded from run-time secrets by a one-shot subcommand, which no-ops once any
+admin exists:
+
+```sh
+ADMIN_BOOTSTRAP_EMAIL=admin@example.com \
+ADMIN_BOOTSTRAP_PASSWORD='a-strong-secret-passphrase' \
+  cargo run -p server -- bootstrap-admin
+```
+
+### Configuration
+
+All of the following are optional and default to secure values; a
+present-but-unparseable value fails fast at startup.
+
+| Variable                           | Default | Meaning                            |
+| ---------------------------------- | ------- | ---------------------------------- |
+| `ADMIN_PASSWORD_MIN_LENGTH`        | `12`    | Minimum password length            |
+| `ADMIN_PASSWORD_REQUIRE_UPPERCASE` | `true`  | Require an uppercase letter        |
+| `ADMIN_PASSWORD_REQUIRE_LOWERCASE` | `true`  | Require a lowercase letter         |
+| `ADMIN_PASSWORD_REQUIRE_DIGIT`     | `true`  | Require a digit                    |
+| `ADMIN_PASSWORD_REQUIRE_SYMBOL`    | `false` | Require a symbol                   |
+| `ADMIN_LOCKOUT_MAX_ATTEMPTS`       | `5`     | Failures before lockout engages    |
+| `ADMIN_LOCKOUT_BASE_SECONDS`       | `60`    | First lock duration (then doubles) |
+| `ADMIN_LOCKOUT_MAX_SECONDS`        | `3600`  | Ceiling for the lock duration      |
+| `ARGON2_MEMORY_KIB`                | `19456` | argon2id memory cost (KiB)         |
+| `ARGON2_ITERATIONS`                | `2`     | argon2id iterations                |
+| `ARGON2_PARALLELISM`               | `1`     | argon2id parallelism               |

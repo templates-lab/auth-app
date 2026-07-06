@@ -4,16 +4,26 @@
 //! translates HTTP requests into application calls and back; it holds no
 //! business logic and no storage concerns.
 
-use application::HealthService;
+use application::{HealthService, LoginService};
 use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
 
+pub mod auth;
+
 /// Build the HTTP router, injecting the application services as state.
 ///
-/// The router is intentionally minimal — a single readiness probe — so the
-/// composition root can boot an HTTP server before any feature endpoints exist.
-/// New modules add their routes here as they land.
-pub fn router(health: HealthService) -> Router {
+/// Each concern is a self-contained sub-router carrying its own state, merged
+/// onto a stateless base — so adding a delivery surface (here, admin login)
+/// never entangles it with another's state. New features add a `.merge(...)`
+/// line as they land.
+pub fn router(health: HealthService, login: LoginService) -> Router {
+    Router::new()
+        .merge(health_routes(health))
+        .merge(auth::routes(login))
+}
+
+/// The readiness-probe sub-router.
+fn health_routes(health: HealthService) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .with_state(health)

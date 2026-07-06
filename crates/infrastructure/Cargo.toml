@@ -19,7 +19,13 @@ workspace = true
 domain.workspace = true
 async-trait.workspace = true
 sqlx.workspace = true
+# The argon2 adapter implements the `PasswordHasher` port. `tokio` is a real
+# dependency here (not just for tests): the adapter offloads the CPU-bound argon2
+# work to `spawn_blocking` so it never stalls the async runtime.
+argon2.workspace = true
+tokio.workspace = true
 
-# Test-only: a Tokio runtime for `#[tokio::test]`.
+# Test-only: `#[tokio::test]` still needs the macros; the runtime itself is now a
+# normal dependency above.
 [dev-dependencies]
 tokio.workspace = true
