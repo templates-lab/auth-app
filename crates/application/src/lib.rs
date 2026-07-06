@@ -8,6 +8,12 @@ use std::sync::Arc;
 
 use domain::{Health, HealthCheck};
 
+pub mod auth;
+
+pub use auth::{
+    BootstrapError, BootstrapOutcome, BootstrapService, LoginError, LoginRequest, LoginService,
+};
+
 /// Application service exposing the health use case.
 ///
 /// Constructed from any adapter implementing the [`HealthCheck`] domain port,

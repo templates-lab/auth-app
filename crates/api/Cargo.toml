@@ -19,3 +19,5 @@ workspace = true
 application.workspace = true
 domain.workspace = true
 axum.workspace = true
+# JSON request/response bodies at the HTTP boundary.
+serde.workspace = true

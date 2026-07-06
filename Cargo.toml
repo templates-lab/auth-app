@@ -37,6 +37,12 @@ module-demo = { path = "crates/module-demo" }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 async-trait = "0.1"
+# Password hashing. Argon2id is the OWASP-recommended algorithm for password
+# storage; the `argon2` crate pulls in the RustCrypto `password-hash` (PHC
+# string) machinery so parameters and salt travel embedded in the encoded hash.
+argon2 = "0.5"
+# JSON (de)serialization for the HTTP request/response bodies at the API boundary.
+serde = { version = "1", features = ["derive"] }
 # Postgres access. `default-features = false` drops the bundled runtime/TLS pair
 # so we choose them explicitly: the Tokio runtime, rustls (ring) for TLS to
 # cloud databases, the Postgres driver, the migration runner, and `macros` (for
