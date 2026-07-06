@@ -166,6 +166,22 @@ docker compose -f infra/postgres/docker-compose.yml exec postgres \
 #   -> 1   (the restore brought the dropped table and its row back)
 ```
 
-The shell scripts and the init script are syntax-checked in CI-independent form
-(`bash -n`); the round-trip above is the behavioural test to run wherever a
-Docker daemon is available.
+### Behavioural test without Docker
+
+The round-trip above needs a Docker daemon. For environments without one, a
+hermetic harness stubs `pg_dump` / `pg_restore` on `PATH` and drives the real
+`pg-backup.sh` and `pg-restore.sh` end-to-end, asserting the behaviours that
+matter — atomic archive rename, retention pruning to the newest `N`, and the
+restore contract (`--clean --if-exists --single-transaction --exit-on-error`,
+plus the argument/error exit codes):
+
+```bash
+./infra/postgres/scripts/test-backup-restore.sh
+#   -> result: 13 passed, 0 failed
+```
+
+This runs anywhere `bash` is available (no Postgres, no Docker), so the backup
+and restore logic is now behaviourally covered — not merely syntax-checked
+(`bash -n`). The Docker round-trip remains the full integration test to run
+wherever a daemon is available, since only it exercises real `pg_dump`/
+`pg_restore` against a live cluster.
