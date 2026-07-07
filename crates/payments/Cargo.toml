@@ -1,0 +1,21 @@
+[package]
+name = "payments"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# The payments bounded context's domain: the PaymentProvider port, the payment
+# state machine, and the PaymentRepository persistence port. Mirrors `domain`'s
+# discipline (no web framework, no database driver, no payment-provider SDK) so
+# that swapping or adding a provider (Stripe, a fake for tests, ...) touches
+# only its own adapter crate, never this one. `async-trait` is the same
+# ergonomics-only exception `domain` makes.
+[dependencies]
+async-trait.workspace = true

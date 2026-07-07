@@ -15,11 +15,13 @@ web frontend, deployable behind Traefik with Postgres.
 │   ├── feature-dashboard/ Dashboard feature (@auth-app/feature-dashboard)
 │   └── feature-users/     Users feature (@auth-app/feature-users)
 ├── crates/        Rust backend (Cargo workspace, hexagonal architecture)
-│   ├── domain/          Business model and ports — no framework deps
+│   ├── domain/          Auth/session business model and ports — no framework deps
+│   ├── payments/        Payments business model and ports — a second, independent domain
 │   ├── application/     Use cases orchestrating the domain
-│   ├── infrastructure/  Adapters implementing domain ports
+│   ├── infrastructure/  Adapters implementing domain and payments ports
 │   ├── api/             HTTP boundary (axum router)
 │   ├── server/          Composition root — the `server` binary
+│   ├── testkit/         Ephemeral-Postgres integration test harness (dev-only)
 │   └── xtask/           Workspace automation (`cargo xtask`)
 ├── infra/         Deployment
 │   ├── docker/    Dockerfiles
@@ -205,3 +207,29 @@ present-but-unparseable value fails fast at startup.
 | `ARGON2_PARALLELISM`               | `1`     | argon2id parallelism               |
 | `SESSION_IDLE_TIMEOUT_SECS`        | `1800`  | Session dies after this much inactivity |
 | `SESSION_ABSOLUTE_TIMEOUT_SECS`    | `43200` | Session dies this long after login, regardless of activity |
+
+## Payments
+
+The `payments` crate is a second, independent domain (its own bounded
+context — it never depends on, or is depended on by, the auth `domain`): the
+[`PaymentProvider`] trait (`create_intent`, `capture`, `refund`,
+`get_status`) and the payment state machine
+(`Created → RequiresAction/Authorized → Captured → PartiallyRefunded/Refunded`,
+with `Failed`/`Canceled` reachable early and terminal). No payment-provider
+SDK type ever crosses into this crate's public API — swapping providers, or
+adding a second one, touches only a new adapter behind [`PaymentProvider`].
+
+State only ever changes through `PaymentRepository::transition`, which is
+atomic and optimistic-concurrency-guarded: it moves a payment from an
+`expected_current` status to the next one and appends a row to its history in
+one transaction, in Postgres's own `payments` schema
+(`payments.payments` / `payments.payment_status_history`). A caller whose
+`expected_current` no longer matches (another transition already won) gets
+`PaymentRepositoryError::Conflict` back rather than a corrupted state machine.
+
+This bead intentionally stops at the trait, the model, and the schema — no
+concrete provider, no webhook handling, and no admin UI yet. Those land as
+their own beads: a Stripe (and fake, for tests) provider, signature-verified
+idempotent webhooks, and a transactions view in the admin panel.
+
+[`PaymentProvider`]: crates/payments/src/provider.rs

@@ -20,16 +20,20 @@ repository = "https://github.com/templates-lab/auth-app"
 [workspace.dependencies]
 # Internal crates, wired as path dependencies. The dependency direction is
 # enforced by which of these each member opts into:
-#   api → application → domain     infrastructure → domain
+#   api → application → domain     infrastructure → domain, payments
 #   server (composition root) → api, application, infrastructure, contracts, modules
 # `contracts` is the shared plugin contract; feature modules (e.g. `module-demo`)
 # implement it and are mounted by the server, never depending on one another.
+# `payments` is a second, independent domain (its own bounded context): the
+# auth domain and the payments domain never depend on each other, and both
+# are implemented against by `infrastructure`.
 domain = { path = "crates/domain" }
 application = { path = "crates/application" }
 infrastructure = { path = "crates/infrastructure" }
 api = { path = "crates/api" }
 contracts = { path = "crates/contracts" }
 module-demo = { path = "crates/module-demo" }
+payments = { path = "crates/payments" }
 # Test-only harness (ephemeral Postgres via testcontainers); consumed only
 # from other crates' `[dev-dependencies]`, never a runtime dependency.
 testkit = { path = "crates/testkit" }

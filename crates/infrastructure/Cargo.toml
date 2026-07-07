@@ -12,11 +12,13 @@ publish = false
 workspace = true
 
 # The infrastructure layer implements the domain's ports (adapters). It depends
-# on `domain` (to know the port contracts) and on external drivers — `sqlx` for
-# Postgres, `async-trait` to implement the async `HealthCheck` port. It never
-# depends on `application` or `api`: dependencies point inward.
+# on `domain` and `payments` (to know their port contracts) and on external
+# drivers — `sqlx` for Postgres, `async-trait` to implement the async
+# `HealthCheck`/`PaymentRepository` ports. It never depends on `application` or
+# `api`: dependencies point inward.
 [dependencies]
 domain.workspace = true
+payments.workspace = true
 async-trait.workspace = true
 sqlx.workspace = true
 # The argon2 adapter implements the `PasswordHasher` port. `tokio` is a real

@@ -12,6 +12,7 @@ pub mod clock;
 pub mod db;
 pub mod health;
 pub mod password;
+pub mod payments_repo;
 pub mod session_repo;
 pub mod tokens;
 
@@ -20,6 +21,7 @@ pub use clock::SystemClock;
 pub use db::{connect, run_migrations, PgConfig, PgConfigError, MIGRATOR};
 pub use health::PgHealthCheck;
 pub use password::{Argon2Hasher, Argon2Params};
+pub use payments_repo::PgPaymentRepository;
 pub use session_repo::PgSessionRepository;
 pub use tokens::SecureRandomTokens;
 

@@ -1094,6 +1094,7 @@ dependencies = [
  "argon2",
  "async-trait",
  "domain",
+ "payments",
  "sqlx",
  "testkit",
  "tokio",
@@ -1360,6 +1361,13 @@ dependencies = [
  "base64ct",
  "rand_core",
  "subtle",
+]
+
+[[package]]
+name = "payments"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
 ]
 
 [[package]]
