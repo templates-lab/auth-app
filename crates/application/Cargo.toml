@@ -18,6 +18,9 @@ workspace = true
 [dependencies]
 domain.workspace = true
 payments.workspace = true
+# Structured log events for use-case-level failures (e.g. a webhook that could
+# not be applied), emitted through the same `tracing` pipeline as the API layer.
+tracing.workspace = true
 
 # Test-only: a stub port needs `async-trait` to implement the async `HealthCheck`
 # contract, and `tokio` provides the runtime for `#[tokio::test]`.

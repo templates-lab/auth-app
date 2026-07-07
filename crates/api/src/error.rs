@@ -13,13 +13,13 @@
 //! without the client ever seeing a stack of internal strings.
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
+
+use crate::telemetry;
 
 /// The JSON body every error response carries.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -128,12 +128,16 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let trace_id = next_trace_id();
+        // The trace id is the current request's id (so the error body, the
+        // `x-request-id` header, and the request's log span all share one id);
+        // outside a request — e.g. a unit test — a fresh id is generated.
+        let trace_id = telemetry::current_request_id().unwrap_or_else(telemetry::new_id);
 
-        // Log internal detail against the trace id — the only place a 5xx cause
-        // is recorded — so the client never sees it but an operator can.
+        // Log the internal detail against the trace id — the only place a 5xx
+        // cause is recorded — so the client never sees it but an operator can.
+        // The `request` span (see telemetry) stamps `request_id` on this line.
         if let Some(detail) = &self.internal {
-            eprintln!("api error [{trace_id}] {}: {detail}", self.code);
+            tracing::error!(code = self.code, trace_id, "{detail}");
         }
 
         let body = ErrorResponse {
@@ -144,19 +148,6 @@ impl IntoResponse for ApiError {
         };
         (self.status, Json(body)).into_response()
     }
-}
-
-/// A short correlation id. Not cryptographic — just unique enough to tie a
-/// client-visible error to its server log line: the current time in nanoseconds
-/// mixed with a monotonic per-process counter, rendered as hex.
-fn next_trace_id() -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
-    format!("{:016x}", nanos ^ n.rotate_left(32))
 }
 
 #[cfg(test)]
@@ -210,8 +201,11 @@ mod tests {
         assert_eq!(json["fields"]["password"], "must not be empty");
     }
 
-    #[test]
-    fn trace_ids_are_distinct_across_calls() {
-        assert_ne!(next_trace_id(), next_trace_id());
+    #[tokio::test]
+    async fn trace_id_falls_back_to_a_generated_id_outside_a_request() {
+        // No request scope here, so the id is freshly generated, not empty.
+        let response = ApiError::unauthorized().into_response();
+        let json = body_json(response).await;
+        assert!(json["trace_id"].as_str().is_some_and(|s| s.len() == 16));
     }
 }

@@ -222,12 +222,26 @@
         "tags": [
           "health"
         ],
-        "summary": "Readiness probe: `200 OK` when ready, `503 Service Unavailable` otherwise.",
-        "description": "Awaits the application service, which in turn probes the live database, so a\ndown or unreachable Postgres surfaces here as `503`.",
-        "operationId": "health_handler",
+        "summary": "Liveness probe: `200 OK` whenever the process is running. No dependency is\nchecked, so a slow or briefly-unreachable database never turns into a restart.",
+        "operationId": "liveness_handler",
         "responses": {
           "200": {
-            "description": "Ready"
+            "description": "The process is alive"
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness probe: `200 OK` when ready, `503 Service Unavailable` otherwise.",
+        "description": "Awaits the application service, which in turn probes the live database, so a\ndown or unreachable Postgres surfaces here as `503`.",
+        "operationId": "readiness_handler",
+        "responses": {
+          "200": {
+            "description": "Ready to serve"
           },
           "503": {
             "description": "Not ready (database unreachable)"

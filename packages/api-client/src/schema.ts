@@ -125,11 +125,31 @@ export interface paths {
             cookie?: never;
         };
         /**
+         * Liveness probe: `200 OK` whenever the process is running. No dependency is
+         *     checked, so a slow or briefly-unreachable database never turns into a restart.
+         */
+        get: operations["liveness_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
          * Readiness probe: `200 OK` when ready, `503 Service Unavailable` otherwise.
          * @description Awaits the application service, which in turn probes the live database, so a
          *     down or unreachable Postgres surfaces here as `503`.
          */
-        get: operations["health_handler"];
+        get: operations["readiness_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -548,7 +568,7 @@ export interface operations {
             };
         };
     };
-    health_handler: {
+    liveness_handler: {
         parameters: {
             query?: never;
             header?: never;
@@ -557,7 +577,25 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Ready */
+            /** @description The process is alive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readiness_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ready to serve */
             200: {
                 headers: {
                     [name: string]: unknown;

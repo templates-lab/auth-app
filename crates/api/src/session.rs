@@ -258,7 +258,7 @@ pub(crate) async fn logout_handler(
     // Best-effort, same reasoning as the login handler: an audit-store outage
     // must never block a logout.
     if let Err(e) = state.audit.record(event).await {
-        eprintln!("logout: failed to record audit event: {e}");
+        tracing::warn!("logout: failed to record audit event: {e}");
     }
 
     (StatusCode::NO_CONTENT, clear_session_cookies(jar))

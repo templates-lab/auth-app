@@ -53,6 +53,13 @@ axum-extra = { version = "0.10", default-features = false, features = [
 time = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 async-trait = "0.1"
+# Structured, leveled application logging (spans + events). The library crates
+# emit through `tracing`; the server binary installs the subscriber that renders
+# it (JSON) — so a request-scoped span carries a trace id through every log line.
+tracing = "0.1"
+# The subscriber the composition root installs: JSON output and an env-driven
+# level filter (`RUST_LOG`). Only the binary depends on it.
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Password hashing. Argon2id is the OWASP-recommended algorithm for password
 # storage; the `argon2` crate pulls in the RustCrypto `password-hash` (PHC
 # string) machinery so parameters and salt travel embedded in the encoded hash.

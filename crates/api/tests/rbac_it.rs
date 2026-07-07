@@ -244,3 +244,61 @@ async fn malformed_login_is_422_with_per_field_detail() {
     assert!(err["fields"]["password"].as_str().is_some());
     assert!(err["trace_id"].as_str().is_some_and(|t| !t.is_empty()));
 }
+
+#[tokio::test]
+async fn liveness_readiness_and_request_id_correlation() {
+    let db = testkit::spawn_test_db().await;
+    let app = router(db.pool.clone()).await;
+
+    // Liveness is unconditional: 200 with a request id echoed back.
+    let health = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(health.status(), StatusCode::OK);
+    assert!(health.headers().get("x-request-id").is_some());
+
+    // Readiness probes the database; it is healthy in the test, so 200.
+    let ready = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/ready")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ready.status(), StatusCode::OK);
+
+    // On an error, the body's trace_id equals the response's x-request-id — one
+    // id ties the client's error to the server's request log.
+    let unauth = app
+        .oneshot(
+            Request::builder()
+                .uri("/audit/events")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauth.status(), StatusCode::UNAUTHORIZED);
+    let request_id = unauth
+        .headers()
+        .get("x-request-id")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let body = axum::body::to_bytes(unauth.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let err: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(err["trace_id"], request_id);
+}

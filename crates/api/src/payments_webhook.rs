@@ -38,7 +38,7 @@ async fn handle(State(svc): State<WebhookService>, headers: HeaderMap, body: Byt
         }
         WebhookOutcome::Rejected => StatusCode::BAD_REQUEST,
         WebhookOutcome::Error(msg) => {
-            eprintln!("webhook: internal error: {msg}");
+            tracing::error!("webhook: internal error: {msg}");
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }

@@ -194,9 +194,10 @@ pub(crate) async fn login_handler(
     let account_key = format!("acct:{email_attempted}");
     for key in [format!("ip:{client_ip}"), account_key] {
         if let Err(exceeded) = state.rate_limit.check(&key, now) {
-            eprintln!(
-                "login: rate limit exceeded for {key}, retry after {}s",
-                exceeded.retry_after.as_secs()
+            tracing::warn!(
+                key,
+                retry_after_secs = exceeded.retry_after.as_secs(),
+                "login rate limit exceeded"
             );
             let mut response = too_many_attempts().into_response();
             if let Ok(value) = HeaderValue::from_str(&exceeded.retry_after.as_secs().to_string()) {
@@ -230,7 +231,7 @@ pub(crate) async fn login_handler(
         Ok(authenticated) => {
             let id = authenticated.id;
             if let Err(e) = audit(AuditEventType::LoginSucceeded, Some(id.clone())).await {
-                eprintln!("login: failed to record audit event: {e}");
+                tracing::warn!("login: failed to record audit event: {e}");
             }
             match state.sessions.start(id.clone(), authenticated.role).await {
                 Ok(issued) => {
@@ -250,7 +251,7 @@ pub(crate) async fn login_handler(
         }
         Err(LoginError::InvalidCredentials) => {
             if let Err(e) = audit(AuditEventType::LoginFailed, None).await {
-                eprintln!("login: failed to record audit event: {e}");
+                tracing::warn!("login: failed to record audit event: {e}");
             }
             // Coarse on purpose: identical for a wrong password and an unknown
             // account, so the response never reveals whether the email exists.
@@ -263,7 +264,7 @@ pub(crate) async fn login_handler(
         }
         Err(LoginError::TooManyAttempts { retry_after_secs }) => {
             if let Err(e) = audit(AuditEventType::LockedOut, None).await {
-                eprintln!("login: failed to record audit event: {e}");
+                tracing::warn!("login: failed to record audit event: {e}");
             }
             let mut response = too_many_attempts().into_response();
             if let Some(secs) = retry_after_secs {

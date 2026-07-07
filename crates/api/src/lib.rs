@@ -21,6 +21,7 @@ pub mod payments_webhook;
 pub mod rate_limit;
 pub mod rbac;
 pub mod session;
+pub mod telemetry;
 pub mod transactions;
 
 use oauth::OAuthRedirects;
@@ -72,14 +73,37 @@ pub fn router(
     if let Some(transactions) = transactions {
         router = router.merge(transactions::routes(transactions, sessions.clone()));
     }
-    router.layer(cors::layer(cors_allowed_origins))
+    // CORS wraps every route; the request-context layer is added last so it is
+    // the OUTERMOST wrapper — every request (CORS preflight included) runs inside
+    // a `request` span with a trace id, echoed back in `x-request-id`.
+    router
+        .layer(cors::layer(cors_allowed_origins))
+        .layer(axum::middleware::from_fn(telemetry::request_context))
 }
 
-/// The readiness-probe sub-router.
+/// The liveness + readiness sub-router.
+///
+/// `/health` is *liveness* — the process is up and answering, with no dependency
+/// check, so it always returns `200` and never flaps a container restart on a
+/// transient database blip. `/ready` is *readiness* — it probes the database, so
+/// an orchestrator can hold traffic off an instance that cannot serve yet.
 fn health_routes(health: HealthService) -> Router {
     Router::new()
-        .route("/health", get(health_handler))
+        .route("/health", get(liveness_handler))
+        .route("/ready", get(readiness_handler))
         .with_state(health)
+}
+
+/// Liveness probe: `200 OK` whenever the process is running. No dependency is
+/// checked, so a slow or briefly-unreachable database never turns into a restart.
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses((status = 200, description = "The process is alive")),
+    tag = "health",
+)]
+pub(crate) async fn liveness_handler() -> StatusCode {
+    StatusCode::OK
 }
 
 /// Readiness probe: `200 OK` when ready, `503 Service Unavailable` otherwise.
@@ -88,14 +112,14 @@ fn health_routes(health: HealthService) -> Router {
 /// down or unreachable Postgres surfaces here as `503`.
 #[utoipa::path(
     get,
-    path = "/health",
+    path = "/ready",
     responses(
-        (status = 200, description = "Ready"),
+        (status = 200, description = "Ready to serve"),
         (status = 503, description = "Not ready (database unreachable)"),
     ),
     tag = "health",
 )]
-pub(crate) async fn health_handler(State(health): State<HealthService>) -> StatusCode {
+pub(crate) async fn readiness_handler(State(health): State<HealthService>) -> StatusCode {
     match health.health().await.readiness {
         Readiness::Ready => StatusCode::OK,
         Readiness::NotReady => StatusCode::SERVICE_UNAVAILABLE,

@@ -22,7 +22,8 @@ use utoipa::OpenApi;
         version = "0.1.0",
     ),
     paths(
-        crate::health_handler,
+        crate::liveness_handler,
+        crate::readiness_handler,
         crate::auth::login_handler,
         crate::session::me_handler,
         crate::session::logout_handler,
@@ -73,6 +74,7 @@ mod tests {
         let json = ApiDoc::to_pretty_json();
         for path in [
             "/health",
+            "/ready",
             "/auth/login",
             "/auth/me",
             "/auth/logout",

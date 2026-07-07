@@ -33,6 +33,12 @@ serde.workspace = true
 utoipa.workspace = true
 # Explicit-allowlist CORS layer (never a wildcard).
 tower-http.workspace = true
+# Request-scoped spans and structured log events (the request-id middleware and
+# every handler's error/warn logging).
+tracing.workspace = true
+# `tokio::task_local!` backs the request-id the error type reads; only the macro
+# is used here, not a runtime (the server owns that).
+tokio.workspace = true
 
 # Test-only: `ServiceExt::oneshot` drives the router directly in cors.rs's own
 # HTTP-level tests, without binding a real socket; `tokio` provides the
@@ -41,7 +47,6 @@ tower-http.workspace = true
 # Postgres instead of fakes.
 [dev-dependencies]
 tower.workspace = true
-tokio.workspace = true
 infrastructure.workspace = true
 testkit.workspace = true
 serde_json.workspace = true

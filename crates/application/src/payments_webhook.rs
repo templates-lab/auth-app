@@ -73,7 +73,7 @@ impl WebhookService {
                     WebhookError::Malformed(_) => "malformed",
                 };
                 if let Err(e) = self.store.record_rejected(payload, signature, reason).await {
-                    eprintln!("webhook: failed to record rejected event: {e}");
+                    tracing::warn!("webhook: failed to record rejected event: {e}");
                 }
                 return WebhookOutcome::Rejected;
             }

@@ -140,7 +140,7 @@ async fn callback_handler(
     let authenticated = match state.oauth.complete(&cb_state, &code).await {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("oauth: callback failed: {e}");
+            tracing::warn!("oauth: callback failed: {e}");
             return state.redirect_failure();
         }
     };
@@ -152,7 +152,7 @@ async fn callback_handler(
     {
         Ok(issued) => issued,
         Err(e) => {
-            eprintln!("oauth: failed to issue session: {e}");
+            tracing::error!("oauth: failed to issue session: {e}");
             return state.redirect_failure();
         }
     };
@@ -174,7 +174,7 @@ async fn callback_handler(
         })
         .await
     {
-        eprintln!("oauth: failed to record audit event: {e}");
+        tracing::warn!("oauth: failed to record audit event: {e}");
     }
 
     let jar = attach_session_cookies(jar, &issued);

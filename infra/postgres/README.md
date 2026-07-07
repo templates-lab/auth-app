@@ -57,9 +57,9 @@ The `postgres` service declares a `pg_isready` healthcheck (10s interval, 5
 retries, 30s start period to cover first-time `initdb`). The API declares
 `depends_on: postgres: condition: service_healthy`, so Compose does not start the
 API container until the database reports healthy. The app then connects its pool
-eagerly at startup and its `/health` endpoint reflects live database
-connectivity, so a database outage surfaces as an unhealthy API rather than
-silent failures.
+eagerly at startup and its `/ready` endpoint reflects live database connectivity
+(while `/health` is a dependency-free liveness probe), so a database outage
+surfaces on the readiness probe rather than as silent failures.
 
 ## Least-privilege application role
 

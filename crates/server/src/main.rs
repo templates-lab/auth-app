@@ -76,8 +76,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+/// Install the tracing subscriber: JSON-formatted, structured log events, with
+/// the level filtered by the `RUST_LOG` environment variable (default `info`).
+/// Called once at the start of a long-running command; the `openapi` subcommand
+/// deliberately skips it so its stdout carries only the spec.
+fn init_tracing() {
+    use tracing_subscriber::{fmt, EnvFilter};
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    fmt()
+        .json()
+        .with_current_span(true)
+        .with_env_filter(filter)
+        .init();
+}
+
 /// Run the HTTP server (the default command).
 async fn serve() -> Result<(), Box<dyn std::error::Error>> {
+    init_tracing();
+
     // 1. Configuration from the environment.
     let config = Config::from_env()?;
     let auth = AuthConfig::from_env()?;
@@ -99,10 +115,10 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     // the in-memory executor seam a database-backed executor will later fill.
     let mut migrator = InMemoryExecutor::default();
     let report = modules.run_migrations(&mut migrator)?;
-    println!(
-        "migrations: {} applied, {} already present",
-        report.applied.len(),
-        report.skipped.len()
+    tracing::info!(
+        applied = report.applied.len(),
+        already_present = report.skipped.len(),
+        "module migrations complete"
     );
 
     // 4. Initialize the modules once their schema is in place.
@@ -158,7 +174,10 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     // authapp-a18fa6). Building these here proves the env selection and
     // validates the configuration at startup.
     let payment_config = PaymentProviderConfig::from_env()?;
-    println!("payments: provider = {}", payment_config.label());
+    tracing::info!(
+        provider = payment_config.label(),
+        "payments provider selected"
+    );
     #[allow(clippy::type_complexity)]
     let (payment_provider, webhooks): (
         Option<Arc<dyn payments::PaymentProvider>>,
@@ -173,7 +192,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
                 .ok()
                 .filter(|s| !s.trim().is_empty())
                 .map(|secret| {
-                    println!("payments: stripe webhooks enabled");
+                    tracing::info!("stripe webhooks enabled");
                     WebhookService::new(
                         Arc::new(StripeWebhookVerifier::new(StripeWebhookConfig::new(secret))),
                         Arc::new(PgWebhookEventStore::new(pool.clone())),
@@ -207,7 +226,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     // peer address so the login handler can fall back to it for per-IP lockout
     // when no forwarded header is present.
     let listener = tokio::net::TcpListener::bind(config.socket_addr()).await?;
-    println!("listening on http://{}", listener.local_addr()?);
+    tracing::info!(addr = %listener.local_addr()?, "listening");
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -224,6 +243,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
 /// the repository. The operation is idempotent-friendly: it refuses to run once
 /// any admin exists, so re-running it cannot reset an account.
 async fn bootstrap_admin() -> Result<(), Box<dyn std::error::Error>> {
+    init_tracing();
     let auth = AuthConfig::from_env()?;
     let pg_config = PgConfig::from_env()?;
 
@@ -243,10 +263,10 @@ async fn bootstrap_admin() -> Result<(), Box<dyn std::error::Error>> {
 
     match bootstrap.create_first_admin(&email, &password).await? {
         BootstrapOutcome::Created(id) => {
-            println!("created first admin {email} (id {id})");
+            tracing::info!(%email, %id, "created first admin");
         }
         BootstrapOutcome::AlreadyInitialized => {
-            println!("an administrator already exists; nothing to do");
+            tracing::info!("an administrator already exists; nothing to do");
         }
     }
     Ok(())
