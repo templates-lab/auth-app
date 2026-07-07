@@ -9,6 +9,7 @@ use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
 
 pub mod auth;
+pub mod cors;
 pub mod session;
 
 /// Build the HTTP router, injecting the application services as state.
@@ -16,12 +17,19 @@ pub mod session;
 /// Each concern is a self-contained sub-router carrying its own state, merged
 /// onto a stateless base — so adding a delivery surface (here, admin login)
 /// never entangles it with another's state. New features add a `.merge(...)`
-/// line as they land.
-pub fn router(health: HealthService, login: LoginService, sessions: SessionService) -> Router {
+/// line as they land. The CORS layer wraps the whole router last, so it
+/// applies (and answers preflight `OPTIONS`) uniformly across every route.
+pub fn router(
+    health: HealthService,
+    login: LoginService,
+    sessions: SessionService,
+    cors_allowed_origins: &[String],
+) -> Router {
     Router::new()
         .merge(health_routes(health))
         .merge(auth::routes(login, sessions.clone()))
         .merge(session::routes(sessions))
+        .layer(cors::layer(cors_allowed_origins))
 }
 
 /// The readiness-probe sub-router.

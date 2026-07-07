@@ -99,7 +99,12 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(SystemClock),
         auth.session_policy,
     );
-    let app = modules.router(api::router(health, login, sessions));
+    let app = modules.router(api::router(
+        health,
+        login,
+        sessions,
+        config.cors_allowed_origins(),
+    ));
 
     // 6. Serve. `into_make_service_with_connect_info` records each connection's
     // peer address so the login handler can fall back to it for per-IP lockout

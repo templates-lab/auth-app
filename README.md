@@ -232,4 +232,26 @@ concrete provider, no webhook handling, and no admin UI yet. Those land as
 their own beads: a Stripe (and fake, for tests) provider, signature-verified
 idempotent webhooks, and a transactions view in the admin panel.
 
+## Security headers and CORS
+
+Two layers, split by what each is good at:
+
+- **Traefik** (`infra/traefik/dynamic/middlewares.yml`, `security-headers`)
+  sets the static, per-route response headers: HSTS (1 year,
+  subdomains, preload), `X-Content-Type-Options: nosniff`, a strict
+  `Content-Security-Policy` (no `unsafe-inline`/`unsafe-eval` anywhere —
+  `default-src 'self'` plus per-directive `'self'`), and `frame-ancestors
+  'none'` (paired with `X-Frame-Options: DENY` for older browsers).
+- **The API** (`crates/api/src/cors.rs`) owns CORS, because it needs
+  per-request `Origin` matching and preflight (`OPTIONS`) handling that a
+  static header cannot express. `CORS_ALLOWED_ORIGINS` (comma-separated exact
+  origins, e.g. `https://admin.example.com,http://localhost:5173`) is the
+  allowlist; unset or empty allows no cross-origin request at all — there is
+  no wildcard fallback at any point. Credentialed requests (the session/CSRF
+  cookies) are allowed only for origins on that list.
+
+A single-origin deployment (the default Traefik routing — web on `/`, API on
+`/api`, same host) needs `CORS_ALLOWED_ORIGINS` unset: same-origin requests
+are never subject to CORS in the first place.
+
 [`PaymentProvider`]: crates/payments/src/provider.rs

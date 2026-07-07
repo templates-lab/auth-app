@@ -12,6 +12,7 @@ use infrastructure::Argon2Params;
 pub(crate) struct Config {
     host: IpAddr,
     port: u16,
+    cors_allowed_origins: Vec<String>,
 }
 
 impl Config {
@@ -19,6 +20,12 @@ impl Config {
     ///
     /// - `APP_HOST` — bind address (default `0.0.0.0`)
     /// - `APP_PORT` — bind port (default `8080`)
+    /// - `CORS_ALLOWED_ORIGINS` — comma-separated exact origins allowed to make
+    ///   credentialed cross-origin requests (e.g.
+    ///   `https://admin.example.com,http://localhost:5173`). Unset or empty
+    ///   means no origin is allowed — there is no wildcard fallback; a
+    ///   production deployment behind a single origin (web + API same host,
+    ///   the default Traefik routing) needs nothing here at all.
     pub(crate) fn from_env() -> Result<Self, ConfigError> {
         let host = match std::env::var("APP_HOST") {
             Ok(raw) => raw.parse().map_err(|_| ConfigError::InvalidHost(raw))?,
@@ -28,12 +35,31 @@ impl Config {
             Ok(raw) => raw.parse().map_err(|_| ConfigError::InvalidPort(raw))?,
             Err(_) => 8080,
         };
-        Ok(Self { host, port })
+        let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
+            .ok()
+            .map(|raw| {
+                raw.split(',')
+                    .map(str::trim)
+                    .filter(|origin| !origin.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Self {
+            host,
+            port,
+            cors_allowed_origins,
+        })
     }
 
     /// The address the HTTP server should bind to.
     pub(crate) fn socket_addr(&self) -> SocketAddr {
         SocketAddr::new(self.host, self.port)
+    }
+
+    /// The explicit CORS origin allowlist (possibly empty — never a wildcard).
+    pub(crate) fn cors_allowed_origins(&self) -> &[String] {
+        &self.cors_allowed_origins
     }
 }
 

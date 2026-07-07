@@ -3,9 +3,10 @@
 # short and the edge security posture in a single reviewable place.
 http:
   middlewares:
-    # Security response headers applied to every route. Transport- and
-    # framing-level headers belong at the edge; the backend keeps ownership of
-    # its Content-Security-Policy and CORS (a separate work item).
+    # Security response headers applied to every route (bead authapp-3e68cc).
+    # CORS is NOT set here — it needs per-request Origin reflection against an
+    # explicit allowlist plus preflight handling, which belongs at the API
+    # layer (see crates/api/src/cors.rs); Traefik headers are static per-route.
     security-headers:
       headers:
         frameDeny: true # X-Frame-Options: DENY
@@ -16,6 +17,23 @@ http:
         stsSeconds: 31536000 # HSTS: 1 year
         stsIncludeSubdomains: true
         stsPreload: true
+        forceSTSHeader: true # send HSTS even if Traefik does not detect TLS itself
+        # Strict CSP for the SPA: no 'unsafe-inline'/'unsafe-eval' anywhere.
+        # `frame-ancestors 'none'` is the CSP-native, modern-browser-preferred
+        # equivalent of `frameDeny` above (kept both for older-browser
+        # coverage). Applied to the API's JSON responses too — harmless there,
+        # and keeps one policy in one place instead of two.
+        contentSecurityPolicy: >-
+          default-src 'self';
+          script-src 'self';
+          style-src 'self';
+          img-src 'self' data:;
+          font-src 'self';
+          connect-src 'self';
+          frame-ancestors 'none';
+          base-uri 'none';
+          form-action 'self';
+          upgrade-insecure-requests
         customResponseHeaders:
           Server: "" # strip server fingerprint
           X-Powered-By: ""

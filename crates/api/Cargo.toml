@@ -25,3 +25,12 @@ axum-extra.workspace = true
 time.workspace = true
 # JSON request/response bodies at the HTTP boundary.
 serde.workspace = true
+# Explicit-allowlist CORS layer (never a wildcard).
+tower-http.workspace = true
+
+# Test-only: `ServiceExt::oneshot` drives the router directly in cors.rs's own
+# HTTP-level tests, without binding a real socket; `tokio` provides the
+# `#[tokio::test]` runtime.
+[dev-dependencies]
+tower.workspace = true
+tokio.workspace = true
