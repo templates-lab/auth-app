@@ -82,4 +82,5 @@ services:
       - "traefik.http.routers.web.tls.certresolver=letsencrypt"
       - "traefik.http.routers.web.priority=1"
       - "traefik.http.routers.web.middlewares=web-chain@file"
-      - "traefik.http.services.web.loadbalancer.server.port=80"
+      # The web image runs nginx unprivileged (non-root), listening on 8080.
+      - "traefik.http.services.web.loadbalancer.server.port=8080"

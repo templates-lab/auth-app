@@ -1,0 +1,40 @@
+# Keep the Docker build context small and reproducible: never ship build
+# outputs, dependencies, or local/VCS cruft into the image builds. Everything
+# the Dockerfiles need (source, Cargo.lock, pnpm-lock.yaml, infra config) is
+# tracked and not listed here.
+
+# Rust build output
+target/
+
+# Node / pnpm
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Build output
+**/dist/
+build/
+*.tsbuildinfo
+
+# VCS and CI
+.git/
+.github/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local env and agent runtime injections (never in an image)
+.env
+.env.*
+!.env.example
+.claude/
+.gt-config/
+.mcp.json
+
+# Test / coverage
+coverage/
+
+# Logs
+*.log
