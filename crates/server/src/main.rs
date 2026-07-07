@@ -20,11 +20,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use application::{
-    BootstrapOutcome, BootstrapService, HealthService, LoginService, SessionService,
+    AuditService, BootstrapOutcome, BootstrapService, HealthService, LoginService, SessionService,
 };
 use contracts::{InMemoryExecutor, ModuleRegistry};
 use infrastructure::{
-    Argon2Hasher, PgAdminRepository, PgConfig, PgHealthCheck, PgIpLockoutStore,
+    Argon2Hasher, PgAdminRepository, PgAuditRepository, PgConfig, PgHealthCheck, PgIpLockoutStore,
     PgSessionRepository, SecureRandomTokens, SystemClock,
 };
 
@@ -99,10 +99,12 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(SystemClock),
         auth.session_policy,
     );
+    let audit = AuditService::new(Arc::new(PgAuditRepository::new(pool.clone())));
     let app = modules.router(api::router(
         health,
         login,
         sessions,
+        audit,
         config.cors_allowed_origins(),
         auth.login_rate_limit,
     ));

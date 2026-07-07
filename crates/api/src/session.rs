@@ -8,17 +8,19 @@
 
 use std::time::SystemTime;
 
-use application::{IssuedSession, SessionError, SessionService};
+use application::{AuditService, IssuedSession, SessionError, SessionService};
 use axum::extract::{Request, State};
-use axum::http::{Method, StatusCode};
+use axum::http::{header, HeaderMap, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use domain::SessionToken;
+use domain::{AdminId, AuditEventType, NewAuditEvent, SessionToken};
 use serde::Serialize;
 use time::OffsetDateTime;
+
+use crate::auth::ClientIp;
 
 /// The `HttpOnly` cookie carrying the session bearer token.
 pub const SESSION_COOKIE: &str = "session";
@@ -28,12 +30,23 @@ pub const CSRF_COOKIE: &str = "csrf";
 /// The request header a mutating call must echo the CSRF cookie's value into.
 pub const CSRF_HEADER: &str = "x-csrf-token";
 
+/// State for the logout route: the session service it revokes through, and
+/// the audit trail it records the logout to.
+#[derive(Clone)]
+struct LogoutState {
+    sessions: SessionService,
+    audit: AuditService,
+}
+
 /// Mount the routes that require an authenticated session — currently just
 /// logout. Future protected mutations mount alongside this the same way.
-pub fn routes(sessions: SessionService) -> Router {
+pub fn routes(sessions: SessionService, audit: AuditService) -> Router {
     Router::new()
         .route("/auth/logout", post(logout_handler))
-        .with_state(sessions.clone())
+        .with_state(LogoutState {
+            sessions: sessions.clone(),
+            audit,
+        })
         .layer(axum::middleware::from_fn_with_state(
             sessions,
             require_session,
@@ -180,17 +193,38 @@ fn to_offset_date_time(time: SystemTime) -> OffsetDateTime {
     OffsetDateTime::from(time)
 }
 
-/// Handle `POST /auth/logout`: revoke the session server-side and clear both
-/// cookies. Requires (via [`require_session`]) a valid session and a matching
-/// CSRF header — logout is a mutation like any other.
+/// Handle `POST /auth/logout`: revoke the session server-side, record the
+/// event to the audit trail, and clear both cookies. Requires (via
+/// [`require_session`]) a valid session and a matching CSRF header — logout
+/// is a mutation like any other.
 async fn logout_handler(
-    State(sessions): State<SessionService>,
+    State(state): State<LogoutState>,
     current: axum::Extension<CurrentSession>,
+    ClientIp(client_ip): ClientIp,
+    headers: HeaderMap,
     jar: CookieJar,
 ) -> impl IntoResponse {
     // Best-effort: an already-gone session (e.g. it just expired) is not an
     // error from the caller's point of view — the outcome they wanted (no
     // longer logged in) already holds.
-    let _ = sessions.revoke(&current.0.token).await;
+    let _ = state.sessions.revoke(&current.0.token).await;
+
+    let event = NewAuditEvent {
+        event_type: AuditEventType::LoggedOut,
+        admin_id: Some(AdminId::new(current.0.admin_id.clone())),
+        email_attempted: None,
+        ip: client_ip,
+        user_agent: headers
+            .get(header::USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string),
+        occurred_at: SystemTime::now(),
+    };
+    // Best-effort, same reasoning as the login handler: an audit-store outage
+    // must never block a logout.
+    if let Err(e) = state.audit.record(event).await {
+        eprintln!("logout: failed to record audit event: {e}");
+    }
+
     (StatusCode::NO_CONTENT, clear_session_cookies(jar))
 }

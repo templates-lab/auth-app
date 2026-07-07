@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use domain::{Health, HealthCheck, Readiness};
 
 pub mod admin_repo;
+pub mod audit_repo;
 pub mod clock;
 pub mod db;
 pub mod health;
@@ -17,6 +18,7 @@ pub mod session_repo;
 pub mod tokens;
 
 pub use admin_repo::{PgAdminRepository, PgIpLockoutStore};
+pub use audit_repo::PgAuditRepository;
 pub use clock::SystemClock;
 pub use db::{connect, run_migrations, PgConfig, PgConfigError, MIGRATOR};
 pub use health::PgHealthCheck;

@@ -9,12 +9,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use application::{HealthService, LoginService, SessionService};
+use application::{AuditService, HealthService, LoginService, SessionService};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use infrastructure::{
-    Argon2Hasher, Argon2Params, PgAdminRepository, PgHealthCheck, PgIpLockoutStore,
-    PgSessionRepository, SecureRandomTokens, SystemClock,
+    Argon2Hasher, Argon2Params, PgAdminRepository, PgAuditRepository, PgHealthCheck,
+    PgIpLockoutStore, PgSessionRepository, SecureRandomTokens, SystemClock,
 };
 use tower::ServiceExt;
 
@@ -33,10 +33,12 @@ async fn router_with_rate_limit(pool: sqlx::PgPool, max_requests: u32) -> axum::
         Arc::new(SystemClock),
         domain::SessionPolicy::recommended(),
     );
+    let audit = AuditService::new(Arc::new(PgAuditRepository::new(pool.clone())));
     api::router(
         health,
         login,
         sessions,
+        audit,
         &[],
         api::rate_limit::RateLimitConfig {
             max_requests,

@@ -8,9 +8,11 @@ use std::sync::Arc;
 
 use domain::{Health, HealthCheck};
 
+pub mod audit;
 pub mod auth;
 pub mod session;
 
+pub use audit::AuditService;
 pub use auth::{
     BootstrapError, BootstrapOutcome, BootstrapService, LoginError, LoginRequest, LoginService,
 };

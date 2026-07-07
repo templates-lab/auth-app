@@ -277,4 +277,29 @@ Two layers again:
   `Retry-After`, before any credential work happens. The same `RateLimiter`
   type is meant to be reused for payment webhooks once that endpoint exists.
 
+## Authentication audit trail
+
+Every login attempt (success, failure, or lockout) and every logout is
+recorded to `admin_audit_events` (Postgres): event type, the resolved admin
+id when there is one, the submitted email (kept even when it matched no
+account — that is exactly the case an admin id can't identify), client IP,
+`User-Agent`, and timestamp. No password, session token, or CSRF token is
+ever recorded — `NewAuditEvent` simply has no field to put one in, so that is
+a property of the type rather than a rule callers have to remember. Recording
+is best-effort: an outage in the audit store logs a warning but never blocks
+a real login or logout.
+
+```sh
+curl http://localhost:8080/audit/events?limit=20 \
+  --cookie "session=$SESSION"
+# 200 [{"event_type":"login_succeeded","admin_id":"...","email_attempted":"...", ...}, ...]
+# 401 {"error":"unauthorized"} without a valid session — the trail itself is admin-only
+```
+
+Refresh-token events, OAuth account linking, and password-change events join
+this trail once those features exist (`AuditEventType` is a closed set that
+gains a variant per new feature, not a free-form string); the admin panel's
+own audit *view* is a separate frontend task — this backend query endpoint is
+the surface it will call.
+
 [`PaymentProvider`]: crates/payments/src/provider.rs

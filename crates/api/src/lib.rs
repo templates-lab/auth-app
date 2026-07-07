@@ -4,10 +4,11 @@
 //! translates HTTP requests into application calls and back; it holds no
 //! business logic and no storage concerns.
 
-use application::{HealthService, LoginService, SessionService};
+use application::{AuditService, HealthService, LoginService, SessionService};
 use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
 
+pub mod audit;
 pub mod auth;
 pub mod cors;
 pub mod rate_limit;
@@ -26,13 +27,20 @@ pub fn router(
     health: HealthService,
     login: LoginService,
     sessions: SessionService,
+    audit: AuditService,
     cors_allowed_origins: &[String],
     login_rate_limit: RateLimitConfig,
 ) -> Router {
     Router::new()
         .merge(health_routes(health))
-        .merge(auth::routes(login, sessions.clone(), login_rate_limit))
-        .merge(session::routes(sessions))
+        .merge(auth::routes(
+            login,
+            sessions.clone(),
+            audit.clone(),
+            login_rate_limit,
+        ))
+        .merge(session::routes(sessions.clone(), audit.clone()))
+        .merge(audit::routes(audit, sessions))
         .layer(cors::layer(cors_allowed_origins))
 }
 
