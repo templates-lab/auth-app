@@ -1,0 +1,27 @@
+[package]
+name = "testkit"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Shared integration-test harness: spins up an ephemeral Postgres via
+# testcontainers and applies `infrastructure`'s embedded migrations against
+# it. Test-only by nature — every crate that needs a real database for its
+# integration tests takes this as a `[dev-dependencies]` entry, never a
+# regular dependency, so it never ships in the production binary. Depending on
+# `infrastructure` here (to call `run_migrations`) while `infrastructure`
+# depends on `testkit` in *its own* dev-dependencies is a dev-dependency
+# cycle, which Cargo explicitly supports — it is not a build-graph cycle.
+[dependencies]
+infrastructure.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+testcontainers.workspace = true
+testcontainers-modules.workspace = true

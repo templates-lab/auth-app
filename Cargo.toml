@@ -30,6 +30,9 @@ infrastructure = { path = "crates/infrastructure" }
 api = { path = "crates/api" }
 contracts = { path = "crates/contracts" }
 module-demo = { path = "crates/module-demo" }
+# Test-only harness (ephemeral Postgres via testcontainers); consumed only
+# from other crates' `[dev-dependencies]`, never a runtime dependency.
+testkit = { path = "crates/testkit" }
 
 # External dependencies. The domain crate references no framework or driver;
 # `async-trait` is its one exception — an ergonomics macro (not a runtime) that
@@ -65,6 +68,9 @@ sqlx = { version = "0.8", default-features = false, features = [
     "migrate",
     "macros",
 ] }
+# Ephemeral Postgres containers for integration tests (see `testkit`).
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
 
 # Lints applied across the whole workspace. Members inherit them with
 # `[lints] workspace = true`.

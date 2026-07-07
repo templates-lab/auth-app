@@ -71,6 +71,8 @@ build (`vite-plugin-solid`); only `shared` and `feature-kit` compile to `dist`.
 - Node.js >= 20
 - pnpm (pinned via `packageManager`; use `corepack enable` to activate it)
 - Rust (stable toolchain)
+- Docker — only needed to run `cargo test`; the backend's integration tests
+  spin up their own ephemeral Postgres containers (see below)
 
 ## Getting started
 
@@ -102,6 +104,29 @@ The server binary is the composition root: it reads its configuration from the
 environment (`APP_HOST`, default `0.0.0.0`; `APP_PORT`, default `8080`), builds
 the infrastructure adapters, injects them into the application services, and
 serves the API router.
+
+### Integration tests
+
+`cargo test` runs two kinds of tests: pure unit tests (no I/O) alongside each
+module's source, and Postgres-backed integration tests under
+`crates/infrastructure/tests/*_it.rs`. The latter need no manual database
+setup — the `testkit` crate (`crates/testkit`) starts a fresh, disposable
+Postgres container per test via [testcontainers](https://testcontainers.com/),
+applies every embedded migration against it, and hands the test a connected
+pool. Each test gets its own container, so tests never share schema state and
+run safely in parallel. The only requirement is a running Docker daemon —
+nothing to start or tear down by hand, and nothing left behind afterward.
+
+Adding an integration-test suite for a new module follows the same shape:
+
+```rust
+#[tokio::test]
+async fn my_repo_round_trips() {
+    let db = testkit::spawn_test_db().await;
+    let repo = PgMyRepository::new(db.pool.clone());
+    // ... exercise `repo` against the real, migrated database.
+}
+```
 
 ## Admin authentication
 

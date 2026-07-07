@@ -26,6 +26,8 @@ argon2.workspace = true
 tokio.workspace = true
 
 # Test-only: `#[tokio::test]` still needs the macros; the runtime itself is now a
-# normal dependency above.
+# normal dependency above. `testkit` spins up the ephemeral Postgres the
+# `tests/*_it.rs` integration suites run against.
 [dev-dependencies]
 tokio.workspace = true
+testkit.workspace = true
