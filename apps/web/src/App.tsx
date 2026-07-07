@@ -1,10 +1,21 @@
 import { Route, Router } from "@solidjs/router";
-import type { Component } from "solid-js";
+import type { Component, ParentProps } from "solid-js";
 import { createApiClient } from "@auth-app/api-client";
 import { AppQueryProvider, redirectToLoginOnUnauthorized } from "@auth-app/query/provider";
 import { AdminLayout } from "./shell/AdminLayout";
 import { FeatureRoutes } from "./shell/routes";
 import { Login } from "./auth/Login";
+import { RequireSession } from "./auth/session";
+
+/**
+ * The admin route group: a valid session is required before any of it renders,
+ * and the admin chrome wraps whatever feature route matched.
+ */
+const AdminShell: Component<ParentProps> = (props) => (
+  <RequireSession>
+    <AdminLayout>{props.children}</AdminLayout>
+  </RequireSession>
+);
 
 /**
  * The single api-client instance every feature's queries fetch through. It is
@@ -29,7 +40,7 @@ export const App: Component = () => {
     >
       <Router>
         <Route path="/login" component={Login} />
-        <Route path="/" component={AdminLayout}>
+        <Route path="/" component={AdminShell}>
           {FeatureRoutes()}
         </Route>
       </Router>
