@@ -9,6 +9,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly re-audit of dependencies: a vulnerability disclosed against an
+  # unchanged dependency is caught even when no one pushes (the `dependency-audit`
+  # job runs on this schedule as well as on every push/PR).
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
 
 # Cancel superseded runs on the same ref (e.g. a new push to an open PR).
 concurrency:
@@ -72,6 +77,36 @@ jobs:
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             | tar -xz gitleaks
           ./gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+
+  # Dependency vulnerability audit, ungated by `changes` (a CVE can be disclosed
+  # against an unchanged dependency) and also run weekly on the schedule above.
+  # Fails the build — and, via the `ci` gate, blocks the merge — on a known
+  # vulnerability. Justified, dated exceptions live in deny.toml (Rust) and
+  # pnpm's audit config (JS); see deny.toml for the process.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Rust: check the whole tree against the RustSec advisory DB. High/critical
+      # vulnerabilities fail; unmaintained is scoped to workspace deps (deny.toml).
+      # A current toolchain + the latest cargo-deny so newer crate editions in the
+      # dependency tree parse cleanly.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: cargo-deny (advisories)
+        run: cargo deny check advisories
+      # JS: fail on high or critical advisories in the pnpm dependency tree.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm audit (high+critical)
+        run: pnpm audit --audit-level high
 
   # Rust backend: format, lint, test, build across the whole Cargo workspace.
   backend:
@@ -151,7 +186,7 @@ jobs:
   # affected job passed. Skipped stacks (unaffected) do not fail the gate.
   ci:
     if: always()
-    needs: [changes, secrets, backend, frontend, api-contract]
+    needs: [changes, secrets, dependency-audit, backend, frontend, api-contract]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate result
@@ -159,9 +194,12 @@ jobs:
           if [ "${{ needs.changes.result }}" != "success" ]; then
             echo "changes job did not succeed"; exit 1
           fi
-          # The secret scan always runs and must always pass.
+          # The secret scan and dependency audit always run and must always pass.
           if [ "${{ needs.secrets.result }}" != "success" ]; then
             echo "secrets job did not succeed"; exit 1
+          fi
+          if [ "${{ needs.dependency-audit.result }}" != "success" ]; then
+            echo "dependency-audit job did not succeed"; exit 1
           fi
           for stack in backend frontend api-contract; do
             case "$stack" in

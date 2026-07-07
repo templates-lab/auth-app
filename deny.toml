@@ -1,0 +1,39 @@
+# cargo-deny configuration for the CI dependency audit (bead authapp-0d4868).
+#
+# The CI `dependency-audit` job runs `cargo deny check advisories`, which checks
+# the whole dependency tree against the RustSec advisory database and fails the
+# build on a known vulnerability. It runs on every push/PR and on a weekly
+# schedule, so a newly-disclosed advisory against an unchanged dependency is
+# caught even with no code change.
+#
+# ## Temporary exceptions
+#
+# When a vulnerability has no fix yet and is assessed as not exploitable here,
+# add it to `ignore` with a justification and a review date, e.g.:
+#
+#   ignore = [
+#     # Not exploitable: we never call the affected API. Review by 2026-10-01.
+#     { id = "RUSTSEC-2025-0000", reason = "unreachable; review by 2026-10-01" },
+#   ]
+#
+# The review date is a documented convention (cargo-deny does not expire an
+# ignore itself); the weekly scheduled run is the forcing function to revisit
+# it. Keep the list empty when there is nothing to ignore.
+
+[advisories]
+version = 2
+# A security vulnerability anywhere in the tree always fails the build. The
+# "unmaintained" check is scoped to workspace (direct) dependencies, so a deep
+# transitive crate merely going unmaintained is not a hard failure — a genuine
+# vulnerability in it still is.
+unmaintained = "workspace"
+ignore = [
+  # tokio-tar PAX-extended-header parsing vulnerability (CVE-2025-62518),
+  # reached ONLY through `testcontainers` — a dev-dependency (`testkit`) used to
+  # start an ephemeral Postgres for integration tests. It is never in the
+  # production binary, and it only ever processes the official postgres image we
+  # pull, not untrusted archives, so it is not exploitable here. No fixed
+  # version is published upstream. Review by 2026-10-01 (or when testcontainers
+  # ships a patched tar dependency).
+  { id = "RUSTSEC-2025-0111", reason = "dev-only via testcontainers; not in prod binary; review by 2026-10-01" },
+]
