@@ -9,7 +9,7 @@
 use std::time::{Duration, SystemTime};
 
 use domain::{
-    AdminRepository, CsrfToken, Email, NewAdmin, PasswordHash, Session, SessionRepository,
+    AdminRepository, CsrfToken, Email, NewAdmin, PasswordHash, Role, Session, SessionRepository,
     SessionToken,
 };
 use infrastructure::{PgAdminRepository, PgSessionRepository};
@@ -21,6 +21,7 @@ async fn seed_admin(pool: &sqlx::PgPool) -> domain::AdminId {
         .insert(&NewAdmin {
             email: Email::parse("admin@example.com").unwrap(),
             password_hash: PasswordHash::from_encoded("hash-1"),
+            role: Role::admin(),
         })
         .await
         .unwrap()
@@ -30,6 +31,7 @@ fn sample_session(admin_id: domain::AdminId, now: SystemTime) -> Session {
     Session {
         token: SessionToken::from_raw("test-token-1"),
         admin_id,
+        role: Role::admin(),
         csrf_token: CsrfToken::from_raw("test-csrf-1"),
         created_at: now,
         absolute_expires_at: now + Duration::from_secs(3600),

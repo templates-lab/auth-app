@@ -319,6 +319,60 @@ impl LockoutPolicy {
     }
 }
 
+/// An account's role, for the minimal RBAC scheme (bead authapp-e00d47).
+///
+/// Held as a validated, normalized string rather than a closed Rust enum on
+/// purpose: adding a new role (say `"editor"`) is then a data change — insert
+/// a row with that value — not a structural one. The enforcement mechanism
+/// ([`crate::session::Session`] carrying a `Role`, and whatever middleware the
+/// `api` layer builds on top of it) never needs to change to support it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Role(String);
+
+impl Role {
+    /// The role bootstrap always assigns to the first administrator.
+    pub fn admin() -> Self {
+        Self("admin".to_string())
+    }
+
+    /// Parse and normalize a role name: trimmed and lowercased, non-empty.
+    pub fn parse(raw: &str) -> Result<Self, RoleError> {
+        let normalized = raw.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            return Err(RoleError::Empty);
+        }
+        Ok(Self(normalized))
+    }
+
+    /// The role name, for persistence or comparison.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Why a role name failed to parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoleError {
+    /// The input was empty after trimming.
+    Empty,
+}
+
+impl std::fmt::Display for RoleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => f.write_str("role must not be empty"),
+        }
+    }
+}
+
+impl std::error::Error for RoleError {}
+
 /// A stored administrator account, as the repository hands it to the domain.
 #[derive(Debug, Clone)]
 pub struct AdminAccount {
@@ -330,6 +384,8 @@ pub struct AdminAccount {
     pub password_hash: PasswordHash,
     /// The account's current lockout counters.
     pub lockout: LockoutState,
+    /// The account's role.
+    pub role: Role,
 }
 
 /// An opaque administrator identifier.
@@ -364,6 +420,8 @@ pub struct NewAdmin {
     pub email: Email,
     /// The already-hashed password.
     pub password_hash: PasswordHash,
+    /// The account's role.
+    pub role: Role,
 }
 
 /// Port: hashes and verifies passwords.
@@ -478,6 +536,24 @@ pub trait Clock: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn role_normalizes_case_and_whitespace() {
+        assert_eq!(Role::parse("Admin").unwrap().as_str(), "admin");
+        assert_eq!(Role::parse("  editor  ").unwrap().as_str(), "editor");
+        assert_eq!(Role::parse("admin").unwrap(), Role::admin());
+    }
+
+    #[test]
+    fn role_rejects_empty_input() {
+        assert_eq!(Role::parse("").unwrap_err(), RoleError::Empty);
+        assert_eq!(Role::parse("   ").unwrap_err(), RoleError::Empty);
+    }
+
+    #[test]
+    fn distinct_roles_are_not_equal() {
+        assert_ne!(Role::parse("admin").unwrap(), Role::parse("user").unwrap());
+    }
 
     #[test]
     fn email_normalizes_and_validates() {

@@ -13,10 +13,10 @@ use axum::extract::{Request, State};
 use axum::http::{header, HeaderMap, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use domain::{AdminId, AuditEventType, NewAuditEvent, SessionToken};
+use domain::{AdminId, AuditEventType, NewAuditEvent, Role, SessionToken};
 use serde::Serialize;
 use time::OffsetDateTime;
 
@@ -38,11 +38,13 @@ struct LogoutState {
     audit: AuditService,
 }
 
-/// Mount the routes that require an authenticated session — currently just
-/// logout. Future protected mutations mount alongside this the same way.
+/// Mount the routes that require an authenticated session: `/auth/me` (any
+/// role) and `/auth/logout`. Future protected mutations mount alongside these
+/// the same way.
 pub fn routes(sessions: SessionService, audit: AuditService) -> Router {
     Router::new()
         .route("/auth/logout", post(logout_handler))
+        .route("/auth/me", get(me_handler))
         .with_state(LogoutState {
             sessions: sessions.clone(),
             audit,
@@ -59,6 +61,9 @@ pub fn routes(sessions: SessionService, audit: AuditService) -> Router {
 pub struct CurrentSession {
     /// The authenticated administrator's id.
     pub admin_id: String,
+    /// The authenticated administrator's role — the same value `/auth/me`
+    /// reports and [`crate::rbac::require_role`] checks.
+    pub role: Role,
     /// The raw session token, so a handler that ends the session (logout,
     /// rotation) can act on the exact row without a second cookie read.
     pub token: SessionToken,
@@ -105,6 +110,7 @@ pub async fn require_session(
     let mut request = request;
     request.extensions_mut().insert(CurrentSession {
         admin_id: authenticated.admin_id.as_str().to_string(),
+        role: authenticated.role,
         token,
     });
     next.run(request).await
@@ -191,6 +197,26 @@ fn clear_session_cookies(jar: CookieJar) -> CookieJar {
 
 fn to_offset_date_time(time: SystemTime) -> OffsetDateTime {
     OffsetDateTime::from(time)
+}
+
+/// The body `GET /auth/me` returns: enough for the frontend to know who is
+/// logged in and which role's guards to apply.
+#[derive(Debug, Serialize)]
+struct MeOut {
+    admin_id: String,
+    role: String,
+}
+
+/// Handle `GET /auth/me`: report the authenticated admin's id and role, so
+/// frontend guards can hide routes/actions the role does not permit without
+/// a separate round trip. Any authenticated role may call this — it is not
+/// itself role-gated (see [`crate::rbac::require_role`] for endpoints that
+/// are).
+async fn me_handler(current: axum::Extension<CurrentSession>) -> impl IntoResponse {
+    Json(MeOut {
+        admin_id: current.0.admin_id.clone(),
+        role: current.0.role.as_str().to_string(),
+    })
 }
 
 /// Handle `POST /auth/logout`: revoke the session server-side, record the

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use domain::{
-    AdminId, Clock, CsrfToken, Session, SessionPolicy, SessionRepository, SessionToken,
+    AdminId, Clock, CsrfToken, Role, Session, SessionPolicy, SessionRepository, SessionToken,
     SessionTokenGenerator,
 };
 
@@ -32,6 +32,9 @@ pub struct IssuedSession {
 pub struct AuthenticatedSession {
     /// The admin this session belongs to.
     pub admin_id: AdminId,
+    /// The admin's role, as of when this session was issued (see
+    /// [`domain::Session::role`] for the snapshot-vs-live-lookup trade-off).
+    pub role: Role,
     /// The session's CSRF token, to check against the request header on
     /// mutating requests.
     pub csrf_token: CsrfToken,
@@ -111,7 +114,11 @@ impl SessionService {
     /// login therefore gets a fresh, unguessable token pair rather than
     /// reusing anything from a prior session, which is the "rotate on login"
     /// requirement satisfied by construction.
-    pub async fn start(&self, admin_id: AdminId) -> Result<IssuedSession, SessionError> {
+    pub async fn start(
+        &self,
+        admin_id: AdminId,
+        role: Role,
+    ) -> Result<IssuedSession, SessionError> {
         let now = self.clock.now();
         let token = self.tokens.generate_session_token();
         let csrf_token = self.tokens.generate_csrf_token();
@@ -120,6 +127,7 @@ impl SessionService {
         let session = Session {
             token: token.clone(),
             admin_id,
+            role,
             csrf_token: csrf_token.clone(),
             created_at: now,
             absolute_expires_at,
@@ -159,6 +167,7 @@ impl SessionService {
 
         Ok(AuthenticatedSession {
             admin_id: session.admin_id,
+            role: session.role,
             csrf_token: session.csrf_token,
         })
     }
@@ -186,7 +195,7 @@ impl SessionService {
     pub async fn rotate(&self, old_token: &SessionToken) -> Result<IssuedSession, SessionError> {
         let authenticated = self.authenticate(old_token).await?;
         self.sessions.delete(old_token).await.map_err(internal)?;
-        self.start(authenticated.admin_id).await
+        self.start(authenticated.admin_id, authenticated.role).await
     }
 
     /// Revoke a session server-side (logout). Idempotent: revoking a token
@@ -279,10 +288,14 @@ mod tests {
     #[tokio::test]
     async fn start_then_authenticate_round_trips() {
         let (svc, _) = service(SystemTime::UNIX_EPOCH, SessionPolicy::recommended());
-        let issued = svc.start(AdminId::new("admin-1")).await.unwrap();
+        let issued = svc
+            .start(AdminId::new("admin-1"), Role::admin())
+            .await
+            .unwrap();
 
         let authenticated = svc.authenticate(&issued.token).await.unwrap();
         assert_eq!(authenticated.admin_id, AdminId::new("admin-1"));
+        assert_eq!(authenticated.role, Role::admin());
         assert!(authenticated.csrf_token.verify(issued.csrf_token.as_str()));
     }
 
@@ -312,7 +325,10 @@ mod tests {
             policy,
         );
 
-        let issued = svc.start(AdminId::new("admin-1")).await.unwrap();
+        let issued = svc
+            .start(AdminId::new("admin-1"), Role::admin())
+            .await
+            .unwrap();
 
         // Advance past the idle timeout.
         *clock.0.lock().unwrap() = now + Duration::from_secs(11);
@@ -326,7 +342,10 @@ mod tests {
     #[tokio::test]
     async fn csrf_verification_requires_matching_header() {
         let (svc, _) = service(SystemTime::UNIX_EPOCH, SessionPolicy::recommended());
-        let issued = svc.start(AdminId::new("admin-1")).await.unwrap();
+        let issued = svc
+            .start(AdminId::new("admin-1"), Role::admin())
+            .await
+            .unwrap();
         let authenticated = svc.authenticate(&issued.token).await.unwrap();
 
         assert!(svc
@@ -345,7 +364,10 @@ mod tests {
     #[tokio::test]
     async fn rotate_issues_a_new_token_and_kills_the_old_one() {
         let (svc, sessions) = service(SystemTime::UNIX_EPOCH, SessionPolicy::recommended());
-        let issued = svc.start(AdminId::new("admin-1")).await.unwrap();
+        let issued = svc
+            .start(AdminId::new("admin-1"), Role::admin())
+            .await
+            .unwrap();
 
         let rotated = svc.rotate(&issued.token).await.unwrap();
         assert_ne!(rotated.token, issued.token);
@@ -360,7 +382,10 @@ mod tests {
     #[tokio::test]
     async fn revoke_deletes_the_session() {
         let (svc, sessions) = service(SystemTime::UNIX_EPOCH, SessionPolicy::recommended());
-        let issued = svc.start(AdminId::new("admin-1")).await.unwrap();
+        let issued = svc
+            .start(AdminId::new("admin-1"), Role::admin())
+            .await
+            .unwrap();
 
         svc.revoke(&issued.token).await.unwrap();
         assert!(sessions.find(&issued.token).await.unwrap().is_none());

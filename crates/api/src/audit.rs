@@ -12,18 +12,30 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use domain::AuditEvent;
+use domain::{AuditEvent, Role};
 use serde::{Deserialize, Serialize};
 
+use crate::rbac::require_role;
 use crate::session::require_session;
 
-/// Mount the audit routes, gated by [`require_session`] — only an
-/// authenticated admin may read the trail. `GET` is exempt from CSRF (it is
-/// not a mutation), so no CSRF header is required here.
+/// Mount the audit routes, gated by [`require_session`] (any authenticated
+/// session) *and* [`require_role`] (the `admin` role specifically) — viewing
+/// the security audit trail is an admin-only action even in a scheme with
+/// lower-privileged roles. `GET` is exempt from CSRF (it is not a mutation),
+/// so no CSRF header is required here.
+///
+/// Layer order matters: `require_role` is added first (so it becomes the
+/// inner layer, running second) and `require_session` last (the outer layer,
+/// running first) — `require_role` reads the `CurrentSession` only
+/// `require_session` has populated by the time it runs.
 pub fn routes(audit: AuditService, sessions: SessionService) -> Router {
     Router::new()
         .route("/audit/events", get(list_events))
         .with_state(audit)
+        .layer(axum::middleware::from_fn_with_state(
+            Role::admin(),
+            require_role,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             sessions,
             require_session,

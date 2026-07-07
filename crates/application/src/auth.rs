@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use domain::{
     AdminId, AdminRepository, Clock, Email, IpLockoutStore, LockoutPolicy, NewAdmin,
-    PasswordHasher, PasswordPolicy, PasswordPolicyError,
+    PasswordHasher, PasswordPolicy, PasswordPolicyError, Role,
 };
 
 /// A single login attempt: the submitted credentials plus the client's address.
@@ -65,6 +65,18 @@ impl std::fmt::Display for LoginError {
 }
 
 impl std::error::Error for LoginError {}
+
+/// The identity of a successfully authenticated administrator: enough for the
+/// delivery layer to issue a session ([`crate::SessionService::start`]) and
+/// record the login to the audit trail, without re-fetching the account.
+#[derive(Debug, Clone)]
+pub struct AuthenticatedAdmin {
+    /// The authenticated administrator's id.
+    pub id: AdminId,
+    /// The administrator's role, for the session the delivery layer issues
+    /// next and for the RBAC middleware that later reads it back.
+    pub role: Role,
+}
 
 /// Application service for the admin login use case.
 ///
@@ -118,7 +130,7 @@ impl LoginService {
     /// 3. **Record failures on both axes.** A failure bumps the IP counter
     ///    always and the account counter when the account exists; a success
     ///    clears both.
-    pub async fn login(&self, request: LoginRequest) -> Result<AdminId, LoginError> {
+    pub async fn login(&self, request: LoginRequest) -> Result<AuthenticatedAdmin, LoginError> {
         let now = self.clock.now();
         let ip = request.client_ip.as_str();
 
@@ -168,7 +180,10 @@ impl LoginService {
                     // Success: clear both counters.
                     self.reset_account(&account.id, now).await?;
                     self.reset_ip(ip, now).await?;
-                    Ok(account.id)
+                    Ok(AuthenticatedAdmin {
+                        id: account.id,
+                        role: account.role,
+                    })
                 } else {
                     // Wrong password: bump the account and IP counters.
                     let next = self.policy.register_failure(&account.lockout, now);
@@ -336,6 +351,10 @@ impl BootstrapService {
             .insert(&NewAdmin {
                 email,
                 password_hash,
+                // The very first administrator is always `admin` — there is
+                // no lower-privileged role to choose from before any account
+                // exists to grant one.
+                role: Role::admin(),
             })
             .await
             .map_err(|e| BootstrapError::Internal(e.to_string()))?;
@@ -419,6 +438,7 @@ mod tests {
                 email: admin.email.clone(),
                 password_hash: admin.password_hash.clone(),
                 lockout: LockoutState::clear(),
+                role: admin.role.clone(),
             });
             Ok(id)
         }
@@ -460,6 +480,7 @@ mod tests {
             email: Email::parse(email).unwrap(),
             password_hash: PasswordHash::from_encoded(format!("hash:{password}")),
             lockout: LockoutState::clear(),
+            role: Role::admin(),
         });
     }
 
@@ -492,11 +513,12 @@ mod tests {
             LockoutPolicy::recommended(),
         );
 
-        let id = svc
+        let authenticated = svc
             .login(req("admin@example.com", "correct horse", "10.0.0.1"))
             .await
             .unwrap();
-        assert_eq!(id.as_str(), "id-1");
+        assert_eq!(authenticated.id.as_str(), "id-1");
+        assert_eq!(authenticated.role, Role::admin());
     }
 
     #[tokio::test]

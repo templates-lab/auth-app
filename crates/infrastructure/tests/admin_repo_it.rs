@@ -7,7 +7,7 @@
 //! test gets its own container and schema — no shared state, no ordering
 //! dependence between tests. Requires a running Docker daemon.
 
-use domain::{AdminRepository, Email, LockoutState, NewAdmin, PasswordHash, RepositoryError};
+use domain::{AdminRepository, Email, LockoutState, NewAdmin, PasswordHash, RepositoryError, Role};
 use infrastructure::PgAdminRepository;
 
 #[tokio::test]
@@ -20,6 +20,7 @@ async fn insert_then_find_by_email_round_trips() {
         .insert(&NewAdmin {
             email: email.clone(),
             password_hash: PasswordHash::from_encoded("argon2-hash-placeholder"),
+            role: Role::admin(),
         })
         .await
         .unwrap();
@@ -49,6 +50,7 @@ async fn duplicate_email_is_rejected() {
     let admin = NewAdmin {
         email,
         password_hash: PasswordHash::from_encoded("hash-1"),
+        role: Role::admin(),
     };
     repo.insert(&admin).await.unwrap();
 
@@ -66,6 +68,7 @@ async fn update_lockout_persists_counters() {
         .insert(&NewAdmin {
             email: email.clone(),
             password_hash: PasswordHash::from_encoded("hash-1"),
+            role: Role::admin(),
         })
         .await
         .unwrap();
@@ -92,12 +95,14 @@ async fn count_reflects_inserted_admins() {
     repo.insert(&NewAdmin {
         email: Email::parse("one@example.com").unwrap(),
         password_hash: PasswordHash::from_encoded("hash-1"),
+        role: Role::admin(),
     })
     .await
     .unwrap();
     repo.insert(&NewAdmin {
         email: Email::parse("two@example.com").unwrap(),
         password_hash: PasswordHash::from_encoded("hash-2"),
+        role: Role::admin(),
     })
     .await
     .unwrap();

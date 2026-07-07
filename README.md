@@ -293,7 +293,8 @@ a real login or logout.
 curl http://localhost:8080/audit/events?limit=20 \
   --cookie "session=$SESSION"
 # 200 [{"event_type":"login_succeeded","admin_id":"...","email_attempted":"...", ...}, ...]
-# 401 {"error":"unauthorized"} without a valid session — the trail itself is admin-only
+# 401 {"error":"unauthorized"} without a valid session
+# 403 {"error":"forbidden"} with a valid session that isn't `admin` (see Roles below)
 ```
 
 Refresh-token events, OAuth account linking, and password-change events join
@@ -301,5 +302,28 @@ this trail once those features exist (`AuditEventType` is a closed set that
 gains a variant per new feature, not a free-form string); the admin panel's
 own audit *view* is a separate frontend task — this backend query endpoint is
 the surface it will call.
+
+## Roles (RBAC)
+
+Every account has a `role` (`admin_users.role`, default and — for now, since
+there is no "create user" endpoint yet — only ever `admin`, assigned by
+bootstrap). The role rides along on the session as a snapshot, the same
+trade-off already made for the CSRF token: it is set once at login and does
+not change mid-session, so changing an account's role takes effect on that
+account's *next* login, not immediately. `Role` is a validated string, not a
+closed Rust enum — adding a role (`"editor"`, say) is a data change, not a
+recompile.
+
+- **`GET /auth/me`** — any authenticated session — reports `{admin_id, role}`,
+  the surface frontend guards call to decide which routes/actions to show.
+- **`crates/api/src/rbac.rs`**'s `require_role` middleware gates a specific
+  endpoint to a specific role, `403` otherwise. `GET /audit/events` is the
+  first example (`Role::admin()`); gating a new endpoint to a new role is one
+  `.layer(...)` line, not a structural change.
+
+```sh
+curl http://localhost:8080/auth/me --cookie "session=$SESSION"
+# 200 {"admin_id":"...","role":"admin"}
+```
 
 [`PaymentProvider`]: crates/payments/src/provider.rs

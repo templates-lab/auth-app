@@ -18,7 +18,7 @@ pub use audit::{
 pub use auth::{
     AdminAccount, AdminId, AdminRepository, Clock, Email, EmailError, IpLockoutStore,
     LockoutPolicy, LockoutState, NewAdmin, PasswordHash, PasswordHashError, PasswordHasher,
-    PasswordPolicy, PasswordPolicyError, PasswordRequirement, RepositoryError,
+    PasswordPolicy, PasswordPolicyError, PasswordRequirement, RepositoryError, Role, RoleError,
 };
 pub use health::{Health, HealthCheck, Readiness};
 pub use session::{

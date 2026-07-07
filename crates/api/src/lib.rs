@@ -12,6 +12,7 @@ pub mod audit;
 pub mod auth;
 pub mod cors;
 pub mod rate_limit;
+pub mod rbac;
 pub mod session;
 
 use rate_limit::RateLimitConfig;

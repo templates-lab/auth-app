@@ -201,11 +201,12 @@ async fn login_handler(
     };
 
     match state.login.login(request).await {
-        Ok(id) => {
+        Ok(authenticated) => {
+            let id = authenticated.id;
             if let Err(e) = audit(AuditEventType::LoginSucceeded, Some(id.clone())).await {
                 eprintln!("login: failed to record audit event: {e}");
             }
-            match state.sessions.start(id.clone()).await {
+            match state.sessions.start(id.clone(), authenticated.role).await {
                 Ok(issued) => {
                     let jar = attach_session_cookies(jar, &issued);
                     (

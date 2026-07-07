@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime};
 use async_trait::async_trait;
 use domain::{
     AdminAccount, AdminId, AdminRepository, Email, IpLockoutStore, LockoutState, NewAdmin,
-    PasswordHash, RepositoryError,
+    PasswordHash, RepositoryError, Role,
 };
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -59,7 +59,7 @@ impl PgAdminRepository {
 impl AdminRepository for PgAdminRepository {
     async fn find_by_email(&self, email: &Email) -> Result<Option<AdminAccount>, RepositoryError> {
         let row = sqlx::query(
-            "SELECT id::text AS id, email, password_hash, failed_attempts, \
+            "SELECT id::text AS id, email, password_hash, failed_attempts, role, \
              EXTRACT(EPOCH FROM locked_until)::bigint AS locked_until_epoch \
              FROM admin_users WHERE email = $1",
         )
@@ -76,6 +76,7 @@ impl AdminRepository for PgAdminRepository {
         let email_str: String = row.try_get("email").map_err(backend)?;
         let password_hash: String = row.try_get("password_hash").map_err(backend)?;
         let failed_attempts: i32 = row.try_get("failed_attempts").map_err(backend)?;
+        let role: String = row.try_get("role").map_err(backend)?;
         let locked_epoch: Option<i64> = row.try_get("locked_until_epoch").map_err(backend)?;
 
         // The stored email was normalized on write, so parsing is expected to
@@ -83,6 +84,8 @@ impl AdminRepository for PgAdminRepository {
         // surfaced as a backend error rather than silently dropped.
         let email = Email::parse(&email_str)
             .map_err(|e| RepositoryError::Backend(format!("stored email {email_str:?}: {e}")))?;
+        let role = Role::parse(&role)
+            .map_err(|e| RepositoryError::Backend(format!("stored role {role:?}: {e}")))?;
 
         Ok(Some(AdminAccount {
             id: AdminId::new(id),
@@ -92,6 +95,7 @@ impl AdminRepository for PgAdminRepository {
                 failed_attempts: failed_attempts.max(0) as u32,
                 locked_until: locked_epoch.map(from_epoch),
             },
+            role,
         }))
     }
 
@@ -125,11 +129,12 @@ impl AdminRepository for PgAdminRepository {
 
     async fn insert(&self, admin: &NewAdmin) -> Result<AdminId, RepositoryError> {
         let result = sqlx::query(
-            "INSERT INTO admin_users (email, password_hash) VALUES ($1, $2) \
+            "INSERT INTO admin_users (email, password_hash, role) VALUES ($1, $2, $3) \
              RETURNING id::text AS id",
         )
         .bind(admin.email.as_str())
         .bind(admin.password_hash.as_str())
+        .bind(admin.role.as_str())
         .fetch_one(&self.pool)
         .await;
 

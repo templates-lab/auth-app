@@ -9,7 +9,7 @@
 use std::time::SystemTime;
 
 use async_trait::async_trait;
-use domain::{AdminId, CsrfToken, RepositoryError, Session, SessionRepository, SessionToken};
+use domain::{AdminId, CsrfToken, RepositoryError, Role, Session, SessionRepository, SessionToken};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 
@@ -38,11 +38,12 @@ impl SessionRepository for PgSessionRepository {
     async fn insert(&self, session: &Session) -> Result<(), RepositoryError> {
         sqlx::query(
             "INSERT INTO admin_sessions \
-             (token, admin_id, csrf_token, created_at, last_seen_at, absolute_expires_at) \
-             VALUES ($1, $2::uuid, $3, to_timestamp($4), to_timestamp($5), to_timestamp($6))",
+             (token, admin_id, role, csrf_token, created_at, last_seen_at, absolute_expires_at) \
+             VALUES ($1, $2::uuid, $3, $4, to_timestamp($5), to_timestamp($6), to_timestamp($7))",
         )
         .bind(session.token.as_str())
         .bind(session.admin_id.as_str())
+        .bind(session.role.as_str())
         .bind(session.csrf_token.as_str())
         .bind(to_epoch(session.created_at))
         .bind(to_epoch(session.last_seen_at))
@@ -55,7 +56,7 @@ impl SessionRepository for PgSessionRepository {
 
     async fn find(&self, token: &SessionToken) -> Result<Option<Session>, RepositoryError> {
         let row = sqlx::query(
-            "SELECT token, admin_id::text AS admin_id, csrf_token, \
+            "SELECT token, admin_id::text AS admin_id, role, csrf_token, \
              EXTRACT(EPOCH FROM created_at)::bigint AS created_at_epoch, \
              EXTRACT(EPOCH FROM last_seen_at)::bigint AS last_seen_at_epoch, \
              EXTRACT(EPOCH FROM absolute_expires_at)::bigint AS absolute_expires_at_epoch \
@@ -72,14 +73,19 @@ impl SessionRepository for PgSessionRepository {
 
         let token_str: String = row.try_get("token").map_err(backend)?;
         let admin_id: String = row.try_get("admin_id").map_err(backend)?;
+        let role: String = row.try_get("role").map_err(backend)?;
         let csrf_token: String = row.try_get("csrf_token").map_err(backend)?;
         let created_at: i64 = row.try_get("created_at_epoch").map_err(backend)?;
         let last_seen_at: i64 = row.try_get("last_seen_at_epoch").map_err(backend)?;
         let absolute_expires_at: i64 = row.try_get("absolute_expires_at_epoch").map_err(backend)?;
 
+        let role = Role::parse(&role)
+            .map_err(|e| RepositoryError::Backend(format!("stored role {role:?}: {e}")))?;
+
         Ok(Some(Session {
             token: SessionToken::from_raw(token_str),
             admin_id: AdminId::new(admin_id),
+            role,
             csrf_token: CsrfToken::from_raw(csrf_token),
             created_at: from_epoch(created_at),
             last_seen_at: from_epoch(last_seen_at),

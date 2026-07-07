@@ -11,7 +11,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use crate::{AdminId, RepositoryError};
+use crate::{AdminId, RepositoryError, Role};
 
 /// The secret bearer value handed to the client as the session cookie.
 ///
@@ -103,6 +103,11 @@ pub struct Session {
     pub token: SessionToken,
     /// The authenticated administrator this session belongs to.
     pub admin_id: AdminId,
+    /// The admin's role at the moment this session was issued — a snapshot,
+    /// not a live lookup: a role change takes effect on that admin's next
+    /// login, the same trade-off `csrf_token` and `admin_id` already make by
+    /// living on the session rather than being re-fetched every request.
+    pub role: Role,
     /// The CSRF token issued alongside this session.
     pub csrf_token: CsrfToken,
     /// When the session was created (or last rotated).
@@ -211,6 +216,7 @@ mod tests {
         let session = Session {
             token: SessionToken::from_raw("t"),
             admin_id: AdminId::new("a"),
+            role: Role::admin(),
             csrf_token: CsrfToken::from_raw("c"),
             created_at: now,
             absolute_expires_at: now + Duration::from_secs(60),
@@ -230,6 +236,7 @@ mod tests {
         let session = Session {
             token: SessionToken::from_raw("t"),
             admin_id: AdminId::new("a"),
+            role: Role::admin(),
             csrf_token: CsrfToken::from_raw("c"),
             created_at: now,
             absolute_expires_at: now + Duration::from_secs(3600),
