@@ -7,7 +7,7 @@ use std::time::Duration;
 use api::oauth::OAuthRedirects;
 use api::rate_limit::RateLimitConfig;
 use domain::{LockoutPolicy, PasswordPolicy, ProviderId, SessionPolicy};
-use infrastructure::{Argon2Params, OidcConfig};
+use infrastructure::{Argon2Params, OidcConfig, StripeConfig};
 
 /// Runtime configuration for the HTTP server.
 #[derive(Debug, Clone)]
@@ -339,3 +339,91 @@ impl std::fmt::Display for OAuthConfigError {
 }
 
 impl std::error::Error for OAuthConfigError {}
+
+/// Which payment provider is active — selected by environment, so switching
+/// between the local `fake` and real `stripe` never recompiles any domain or
+/// application logic (bead authapp-d47ce3).
+#[derive(Debug, Clone)]
+pub(crate) enum PaymentProviderConfig {
+    /// No provider configured; the payment surface is inactive.
+    Disabled,
+    /// The deterministic in-memory provider (local dev / integration tests).
+    Fake,
+    /// The Stripe adapter, in whichever mode its secret key selects.
+    Stripe(StripeConfig),
+}
+
+impl PaymentProviderConfig {
+    /// Read the active provider from `PAYMENT_PROVIDER`:
+    ///
+    /// - unset / empty / `none` → [`Self::Disabled`]
+    /// - `fake` → [`Self::Fake`]
+    /// - `stripe` → [`Self::Stripe`], requiring `STRIPE_SECRET_KEY`
+    ///   (`STRIPE_API_BASE` optional, defaults to `https://api.stripe.com`)
+    ///
+    /// An unrecognized value is an error, never a silent fallback.
+    pub(crate) fn from_env() -> Result<Self, PaymentConfigError> {
+        let raw = std::env::var("PAYMENT_PROVIDER").unwrap_or_default();
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "" | "none" | "disabled" => Ok(Self::Disabled),
+            "fake" => Ok(Self::Fake),
+            "stripe" => {
+                let secret_key = std::env::var("STRIPE_SECRET_KEY")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or_else(|| {
+                        PaymentConfigError(
+                            "STRIPE_SECRET_KEY is required for PAYMENT_PROVIDER=stripe".into(),
+                        )
+                    })?;
+                let mut config = StripeConfig::new(secret_key);
+                if let Some(base) = std::env::var("STRIPE_API_BASE")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                {
+                    config.api_base = base;
+                }
+                Ok(Self::Stripe(config))
+            }
+            other => Err(PaymentConfigError(format!(
+                "unknown PAYMENT_PROVIDER {other:?} (expected fake|stripe|none)"
+            ))),
+        }
+    }
+
+    /// A short label for logs.
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Fake => "fake",
+            Self::Stripe(_) => "stripe",
+        }
+    }
+}
+
+/// A missing or malformed payment configuration value.
+#[derive(Debug)]
+pub(crate) struct PaymentConfigError(String);
+
+impl std::fmt::Display for PaymentConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "payment configuration error: {}", self.0)
+    }
+}
+
+impl std::error::Error for PaymentConfigError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn payment_provider_labels() {
+        assert_eq!(PaymentProviderConfig::Disabled.label(), "disabled");
+        assert_eq!(PaymentProviderConfig::Fake.label(), "fake");
+        assert_eq!(
+            PaymentProviderConfig::Stripe(StripeConfig::new("sk_test")).label(),
+            "stripe"
+        );
+    }
+}

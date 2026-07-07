@@ -25,14 +25,15 @@ use application::{
 };
 use contracts::{InMemoryExecutor, ModuleRegistry};
 use infrastructure::{
-    Argon2Hasher, OAuthSecrets, OidcProvider, PgAdminRepository, PgAuditRepository, PgConfig,
-    PgHealthCheck, PgIpLockoutStore, PgOAuthIdentityRepository, PgPendingAuthStore,
-    PgSessionRepository, ReqwestHttpClient, SecureRandomTokens, SystemClock,
+    Argon2Hasher, FakePaymentProvider, OAuthSecrets, OidcProvider, PgAdminRepository,
+    PgAuditRepository, PgConfig, PgHealthCheck, PgIpLockoutStore, PgOAuthIdentityRepository,
+    PgPendingAuthStore, PgSessionRepository, ReqwestHttpClient, SecureRandomTokens, StripeProvider,
+    SystemClock,
 };
 
 mod config;
 
-use config::{AuthConfig, Config, OAuthSettings};
+use config::{AuthConfig, Config, OAuthSettings, PaymentProviderConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -126,6 +127,22 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         );
         (service, settings.redirects)
     });
+
+    // Select the active payment provider by env (fake for local dev, stripe in
+    // production) — no domain/application logic recompiles when it changes. The
+    // payment HTTP surface (webhooks, admin transactions API) that consumes it
+    // lands in follow-up beads; building it here proves the env selection and
+    // validates its configuration at startup.
+    let payment_config = PaymentProviderConfig::from_env()?;
+    println!("payments: provider = {}", payment_config.label());
+    let _payment_provider: Option<Arc<dyn payments::PaymentProvider>> = match payment_config {
+        PaymentProviderConfig::Disabled => None,
+        PaymentProviderConfig::Fake => Some(Arc::new(FakePaymentProvider::new())),
+        PaymentProviderConfig::Stripe(cfg) => Some(Arc::new(StripeProvider::new(
+            cfg,
+            Arc::new(ReqwestHttpClient::new()),
+        ))),
+    };
 
     let app = modules.router(api::router(
         health,

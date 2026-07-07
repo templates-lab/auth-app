@@ -36,14 +36,19 @@ impl std::fmt::Display for HttpError {
 
 impl std::error::Error for HttpError {}
 
-/// Infrastructure-internal port: the two HTTP shapes an OIDC flow needs.
+/// Infrastructure-internal port: the small set of HTTP shapes the OAuth and
+/// payment provider adapters need. `bearer` is optional on `post_form` because
+/// the OIDC token endpoint takes no auth header while Stripe's API takes a
+/// `Bearer` secret key on every call.
 #[async_trait]
 pub trait HttpClient: Send + Sync {
-    /// POST an `application/x-www-form-urlencoded` body (the token endpoint).
+    /// POST an `application/x-www-form-urlencoded` body, optionally with a
+    /// `Bearer` token.
     async fn post_form(
         &self,
         url: &str,
         form: &[(String, String)],
+        bearer: Option<&str>,
     ) -> Result<HttpResponse, HttpError>;
 
     /// GET with a `Bearer` token (the userinfo endpoint).
@@ -79,14 +84,13 @@ impl HttpClient for ReqwestHttpClient {
         &self,
         url: &str,
         form: &[(String, String)],
+        bearer: Option<&str>,
     ) -> Result<HttpResponse, HttpError> {
-        let response = self
-            .client
-            .post(url)
-            .form(form)
-            .send()
-            .await
-            .map_err(|e| HttpError(e.to_string()))?;
+        let mut request = self.client.post(url).form(form);
+        if let Some(bearer) = bearer {
+            request = request.bearer_auth(bearer);
+        }
+        let response = request.send().await.map_err(|e| HttpError(e.to_string()))?;
         let status = response.status().as_u16();
         let body = response
             .text()

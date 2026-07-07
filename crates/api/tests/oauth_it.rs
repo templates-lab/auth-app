@@ -71,6 +71,7 @@ impl HttpClient for ScriptedHttp {
         &self,
         _url: &str,
         _form: &[(String, String)],
+        _bearer: Option<&str>,
     ) -> Result<HttpResponse, HttpError> {
         Ok(HttpResponse {
             status: 200,

@@ -17,7 +17,9 @@ pub mod oauth_provider;
 pub mod oauth_repos;
 pub mod oauth_secrets;
 pub mod password;
+pub mod payments_fake;
 pub mod payments_repo;
+pub mod payments_stripe;
 pub mod session_repo;
 pub mod tokens;
 
@@ -31,7 +33,9 @@ pub use oauth_provider::{OidcConfig, OidcProvider};
 pub use oauth_repos::{PgOAuthIdentityRepository, PgPendingAuthStore};
 pub use oauth_secrets::OAuthSecrets;
 pub use password::{Argon2Hasher, Argon2Params};
+pub use payments_fake::FakePaymentProvider;
 pub use payments_repo::PgPaymentRepository;
+pub use payments_stripe::{StripeConfig, StripeProvider};
 pub use session_repo::PgSessionRepository;
 pub use tokens::SecureRandomTokens;
 

@@ -160,7 +160,7 @@ impl OAuthProvider for OidcProvider {
         ];
         let response = self
             .http
-            .post_form(&self.config.token_endpoint, &form)
+            .post_form(&self.config.token_endpoint, &form, None)
             .await
             .map_err(|e| OAuthError::Provider(e.to_string()))?;
         if !response.is_success() {
@@ -294,6 +294,7 @@ mod tests {
             &self,
             _url: &str,
             form: &[(String, String)],
+            _bearer: Option<&str>,
         ) -> Result<HttpResponse, HttpError> {
             *self.posted_form.lock().unwrap() = Some(form.to_vec());
             Ok(self.token.clone())

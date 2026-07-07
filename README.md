@@ -229,10 +229,35 @@ one transaction, in Postgres's own `payments` schema
 `expected_current` no longer matches (another transition already won) gets
 `PaymentRepositoryError::Conflict` back rather than a corrupted state machine.
 
-This bead intentionally stops at the trait, the model, and the schema — no
-concrete provider, no webhook handling, and no admin UI yet. Those land as
-their own beads: a Stripe (and fake, for tests) provider, signature-verified
-idempotent webhooks, and a transactions view in the admin panel.
+Two `PaymentProvider` adapters ship in `infrastructure`, selected by
+`PAYMENT_PROVIDER` — switching between them recompiles no domain or
+application logic:
+
+- **`stripe`** (`payments_stripe.rs`) — the reference adapter. Talks to
+  Stripe's REST API through the shared `HttpClient` seam (the same one the
+  OIDC adapter uses); test mode vs live is only which `STRIPE_SECRET_KEY` you
+  set. It maps Stripe's PaymentIntent status strings onto this crate's
+  provider-agnostic `PaymentStatus`, and never leaks a Stripe SDK type across
+  the trait. Its request-building, response-parsing, status-mapping, and the
+  full intent → capture → refund path are unit-tested against a scripted
+  transport; only the socket to Stripe itself is unexercised (no live key in
+  CI).
+- **`fake`** (`payments_fake.rs`) — a deterministic in-memory provider for
+  local dev and integration tests, no credentials or network. It is a real,
+  env-selectable adapter, not just a test double: outcomes are driven by the
+  amount's cents (like a gateway's test cards) — cents `01` force a decline,
+  cents `02` force a timeout, anything else succeeds — and created intents are
+  tracked so capture/refund/status stay coherent.
+
+| Variable            | Meaning                                                     |
+| ------------------- | ---------------------------------------------------------- |
+| `PAYMENT_PROVIDER`  | `stripe` \| `fake` \| unset/`none` (disabled)              |
+| `STRIPE_SECRET_KEY` | Required for `stripe` (`sk_test_...` or `sk_live_...`)     |
+| `STRIPE_API_BASE`   | Optional; defaults to `https://api.stripe.com`             |
+
+Still to come as their own beads: signature-verified idempotent webhooks and
+a transactions view in the admin panel. The payment HTTP surface that wires
+the selected provider into routes lands with those.
 
 ## Security headers and CORS
 
