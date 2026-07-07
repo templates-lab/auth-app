@@ -14,13 +14,18 @@ use std::time::SystemTime;
 
 use async_trait::async_trait;
 use payments::{
-    Currency, Money, NewPayment, Payment, PaymentId, PaymentRepository, PaymentRepositoryError,
-    PaymentStatus, PaymentStatusChange, ProviderReference,
+    Currency, Money, NewPayment, Payment, PaymentId, PaymentQuery, PaymentRepository,
+    PaymentRepositoryError, PaymentStatus, PaymentStatusChange, ProviderReference,
 };
-use sqlx::postgres::PgPool;
-use sqlx::Row;
+use sqlx::postgres::{PgArguments, PgPool};
+use sqlx::{Arguments, Row};
 
 use crate::admin_repo::{from_epoch, to_epoch};
+
+/// The hard cap on how many payments one [`PaymentRepository::list`] call
+/// returns, regardless of the requested `limit` — the same defence against an
+/// unbounded scan the audit endpoint applies.
+const MAX_LIST_LIMIT: u32 = 200;
 
 /// Map an arbitrary sqlx error to a backend [`PaymentRepositoryError`].
 fn backend(err: sqlx::Error) -> PaymentRepositoryError {
@@ -220,6 +225,119 @@ impl PaymentRepository for PgPaymentRepository {
                 })
             })
             .collect()
+    }
+
+    async fn list(&self, query: &PaymentQuery) -> Result<Vec<Payment>, PaymentRepositoryError> {
+        // Build the shared WHERE fragment, then append paging. Placeholders are
+        // numbered as filters are added, so `$next` always matches the next
+        // bound argument regardless of which filters are present.
+        let mut filter = FilterSql::new();
+        filter.push_conditions(query);
+        let limit = query.limit.clamp(1, MAX_LIST_LIMIT);
+
+        let limit_placeholder = filter.next_placeholder();
+        filter.args.add(limit as i64).map_err(bind)?;
+        let offset_placeholder = filter.next_placeholder();
+        filter.args.add(query.offset as i64).map_err(bind)?;
+
+        let sql = format!(
+            "SELECT id::text AS id, provider_reference, amount_minor_units, currency, status, \
+             EXTRACT(EPOCH FROM created_at)::bigint AS created_at_epoch, \
+             EXTRACT(EPOCH FROM updated_at)::bigint AS updated_at_epoch \
+             FROM payments.payments{} \
+             ORDER BY created_at DESC, id DESC LIMIT {limit_placeholder} OFFSET {offset_placeholder}",
+            filter.where_clause(),
+        );
+
+        let rows = sqlx::query_with(&sql, filter.args)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(backend)?;
+
+        rows.into_iter().map(row_to_payment).collect()
+    }
+
+    async fn count(&self, query: &PaymentQuery) -> Result<u64, PaymentRepositoryError> {
+        let mut filter = FilterSql::new();
+        filter.push_conditions(query);
+
+        let sql = format!(
+            "SELECT COUNT(*) AS total FROM payments.payments{}",
+            filter.where_clause(),
+        );
+
+        let row = sqlx::query_with(&sql, filter.args)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(backend)?;
+        let total: i64 = row.try_get("total").map_err(backend)?;
+        Ok(total.max(0) as u64)
+    }
+}
+
+/// Map a query-argument binding failure to a backend error.
+fn bind(err: sqlx::error::BoxDynError) -> PaymentRepositoryError {
+    PaymentRepositoryError::Backend(format!("binding query argument: {err}"))
+}
+
+/// Accumulates the optional `WHERE` conditions of a [`PaymentQuery`] and their
+/// bound arguments, keeping placeholder numbers and argument order in lockstep
+/// so `list` and `count` share one definition of "which rows match".
+struct FilterSql {
+    conditions: Vec<String>,
+    args: PgArguments,
+}
+
+impl FilterSql {
+    fn new() -> Self {
+        Self {
+            conditions: Vec::new(),
+            args: PgArguments::default(),
+        }
+    }
+
+    /// The 1-based placeholder for the argument that will be added next.
+    fn next_placeholder(&self) -> String {
+        format!("${}", self.args.len() + 1)
+    }
+
+    /// Add the status/date filters present in `query`, binding one argument per
+    /// condition.
+    fn push_conditions(&mut self, query: &PaymentQuery) {
+        if let Some(status) = query.status {
+            let p = self.next_placeholder();
+            // `status.as_str()` is a &'static str; bind an owned copy.
+            self.args
+                .add(status.as_str().to_string())
+                .expect("binding a String never fails");
+            self.conditions.push(format!("status = {p}"));
+        }
+        if let Some(after) = query.created_after {
+            let p = self.next_placeholder();
+            self.args
+                .add(to_epoch(after))
+                .expect("binding an i64 never fails");
+            self.conditions
+                .push(format!("created_at >= to_timestamp({p})"));
+        }
+        if let Some(before) = query.created_before {
+            let p = self.next_placeholder();
+            self.args
+                .add(to_epoch(before))
+                .expect("binding an i64 never fails");
+            self.conditions
+                .push(format!("created_at < to_timestamp({p})"));
+        }
+    }
+
+    /// The ` WHERE a AND b` clause (with a leading space), or an empty string
+    /// when no filter is present.
+    fn where_clause(&self) -> String {
+        if self.conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", self.conditions.join(" AND "))
+        }
     }
 }
 

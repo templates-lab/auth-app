@@ -143,6 +143,7 @@ async fn router(pool: sqlx::PgPool) -> axum::Router {
         audit,
         Some((oauth, api::oauth::OAuthRedirects::default())),
         None,
+        None,
         &[],
         api::rate_limit::RateLimitConfig {
             max_requests: 100,

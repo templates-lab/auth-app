@@ -35,4 +35,4 @@ export function createApiClient(options: ApiClientOptions = {}): Client<paths> {
   });
 }
 
-export type { paths } from "./schema";
+export type { paths, components } from "./schema";

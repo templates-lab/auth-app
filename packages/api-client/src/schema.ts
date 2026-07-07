@@ -118,6 +118,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Handle `GET /transactions`: a filtered, paginated payment list, newest
+         *     first.
+         */
+        get: operations["list_transactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transactions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Handle `GET /transactions/{id}`: one payment with its full status history. */
+        get: operations["get_transaction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transactions/{id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Handle `POST /transactions/{id}/refund`: refund a captured payment in full.
+         *     Admin-only (via [`require_role`]) and CSRF-checked (via [`require_session`]).
+         */
+        post: operations["refund_transaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -172,6 +229,78 @@ export interface components {
             admin_id: string;
             /** @description The administrator's role (e.g. `admin`). */
             role: string;
+        };
+        /** @description The result of a successful refund. */
+        RefundOut: {
+            /** @description The status the payment moved to (`refunded` or `partially_refunded`). */
+            status: string;
+        };
+        /** @description One recorded status change in a payment's history. */
+        StatusChangeOut: {
+            /** @description The prior status, or `null` for the row recording creation. */
+            from?: string | null;
+            /**
+             * Format: int64
+             * @description When the transition happened, as Unix epoch seconds.
+             */
+            occurred_at_epoch: number;
+            /** @description An optional human-readable reason (a decline code, `admin_refund`, ...). */
+            reason?: string | null;
+            /** @description The status moved to. */
+            to: string;
+        };
+        /** @description A payment with its full status history — the detail view's payload. */
+        TransactionDetailOut: {
+            /** @description Every recorded status change, oldest first. */
+            history: components["schemas"]["StatusChangeOut"][];
+            /** @description The payment itself. */
+            transaction: components["schemas"]["TransactionOut"];
+        };
+        /** @description One payment row, as returned to the admin panel. */
+        TransactionOut: {
+            /**
+             * Format: int64
+             * @description The amount, in the currency's minor units (e.g. cents) — never a float.
+             */
+            amount_minor_units: number;
+            /**
+             * Format: int64
+             * @description When the payment was created, as Unix epoch seconds.
+             */
+            created_at_epoch: number;
+            /** @description ISO 4217 currency code (`USD`, ...). */
+            currency: string;
+            /** @description The payment's opaque id (its primary key). */
+            id: string;
+            /** @description The provider's reference, once one exists. */
+            provider_reference?: string | null;
+            /** @description The current status (`created`, `captured`, `refunded`, ...). */
+            status: string;
+            /**
+             * Format: int64
+             * @description When the payment's status last changed, as Unix epoch seconds.
+             */
+            updated_at_epoch: number;
+        };
+        /** @description One page of transactions plus the total matching the filter. */
+        TransactionPage: {
+            /** @description The payments on this page, newest first. */
+            items: components["schemas"]["TransactionOut"][];
+            /**
+             * Format: int32
+             * @description The page size that was applied (after capping).
+             */
+            limit: number;
+            /**
+             * Format: int32
+             * @description The offset that was applied.
+             */
+            offset: number;
+            /**
+             * Format: int64
+             * @description Total payments matching the filter across all pages.
+             */
+            total: number;
         };
     };
     responses: never;
@@ -348,6 +477,174 @@ export interface operations {
             };
             /** @description Not ready (database unreachable) */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_transactions: {
+        parameters: {
+            query?: {
+                /** @description Only payments in this status (e.g. `captured`, `refunded`). */
+                status?: string;
+                /** @description Only payments created at or after this Unix epoch second (inclusive). */
+                created_after?: number;
+                /** @description Only payments created strictly before this Unix epoch second. */
+                created_before?: number;
+                /** @description Page size (default 50, capped at 200). */
+                limit?: number;
+                /** @description Rows to skip, for paging (default 0). */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            /** @description Invalid status filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_transaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The payment id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The payment and its status history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDetailOut"];
+                };
+            };
+            /** @description No valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such payment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refund_transaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The payment id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refunded; the payment's new status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundOut"];
+                };
+            };
+            /** @description No valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not the admin role, or missing/mismatched CSRF */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such payment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Payment is not in a refundable state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The provider declined the refund */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The provider was unavailable */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

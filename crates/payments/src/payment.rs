@@ -200,6 +200,36 @@ pub struct NewPayment {
     pub created_at: SystemTime,
 }
 
+/// Filter + pagination for [`PaymentRepository::list`] / [`PaymentRepository::count`].
+///
+/// Every field is optional: an all-default query lists the most recent
+/// payments. `status` narrows to one state; `created_after`/`created_before`
+/// bound the creation time. `limit` and `offset` page the result — the adapter
+/// caps `limit` so a caller can never turn one request into an unbounded scan.
+#[derive(Debug, Clone, Default)]
+pub struct PaymentQuery {
+    /// Only payments currently in this status.
+    pub status: Option<PaymentStatus>,
+    /// Only payments created at or after this instant (inclusive).
+    pub created_after: Option<SystemTime>,
+    /// Only payments created strictly before this instant (exclusive).
+    pub created_before: Option<SystemTime>,
+    /// Maximum rows to return (the adapter applies its own hard cap).
+    pub limit: u32,
+    /// Rows to skip, for paging.
+    pub offset: u32,
+}
+
+/// One page of payments plus the total number matching the filter (ignoring
+/// `limit`/`offset`), so a caller can render page controls.
+#[derive(Debug, Clone)]
+pub struct PaymentPage {
+    /// The payments on this page, newest first.
+    pub items: Vec<Payment>,
+    /// Total payments matching the filter across all pages.
+    pub total: u64,
+}
+
 /// Port: persistence for payments and their status history.
 ///
 /// Implemented by a Postgres adapter in `infrastructure`. [`Self::transition`]
@@ -249,6 +279,14 @@ pub trait PaymentRepository: Send + Sync {
         &self,
         id: &PaymentId,
     ) -> Result<Vec<PaymentStatusChange>, PaymentRepositoryError>;
+
+    /// One filtered, paginated page of payments, newest first. Backs the admin
+    /// transactions list (bead authapp-a18fa6).
+    async fn list(&self, query: &PaymentQuery) -> Result<Vec<Payment>, PaymentRepositoryError>;
+
+    /// Total payments matching a filter, ignoring its `limit`/`offset` — the
+    /// page total shown alongside [`Self::list`].
+    async fn count(&self, query: &PaymentQuery) -> Result<u64, PaymentRepositoryError>;
 }
 
 /// A storage failure from the [`PaymentRepository`] port.

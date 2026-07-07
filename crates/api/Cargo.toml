@@ -18,6 +18,9 @@ workspace = true
 [dependencies]
 application.workspace = true
 domain.workspace = true
+# The payments bounded context's own types (payment status, money, query) cross
+# the transactions HTTP boundary, the same way `domain`'s types do elsewhere.
+payments.workspace = true
 axum.workspace = true
 # Typed cookie building/parsing (HttpOnly/Secure/SameSite/Max-Age) for the
 # session and CSRF cookies.
@@ -50,4 +53,3 @@ async-trait.workspace = true
 base64.workspace = true
 hmac.workspace = true
 sha2.workspace = true
-payments.workspace = true

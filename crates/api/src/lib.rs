@@ -5,7 +5,8 @@
 //! business logic and no storage concerns.
 
 use application::{
-    AuditService, HealthService, LoginService, OAuthLoginService, SessionService, WebhookService,
+    AuditService, HealthService, LoginService, OAuthLoginService, PaymentsService, SessionService,
+    WebhookService,
 };
 use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
@@ -19,6 +20,7 @@ pub mod payments_webhook;
 pub mod rate_limit;
 pub mod rbac;
 pub mod session;
+pub mod transactions;
 
 use oauth::OAuthRedirects;
 pub use openapi::ApiDoc;
@@ -32,8 +34,10 @@ use rate_limit::RateLimitConfig;
 /// line as they land. The CORS layer wraps the whole router last, so it
 /// applies (and answers preflight `OPTIONS`) uniformly across every route.
 ///
-/// `oauth` and `webhooks` are optional: `None` simply leaves those endpoints
-/// unmounted (OAuth returns `404`; the webhook route is absent).
+/// `oauth`, `webhooks`, and `transactions` are optional: `None` simply leaves
+/// those endpoints unmounted (OAuth returns `404`; the webhook and transactions
+/// routes are absent). Transactions is mounted only when a payment provider is
+/// configured, since a refund needs one.
 // The composition root legitimately injects one argument per delivery surface;
 // bundling them into a struct would only move the same wiring elsewhere.
 #[allow(clippy::too_many_arguments)]
@@ -44,6 +48,7 @@ pub fn router(
     audit: AuditService,
     oauth: Option<(OAuthLoginService, OAuthRedirects)>,
     webhooks: Option<WebhookService>,
+    transactions: Option<PaymentsService>,
     cors_allowed_origins: &[String],
     login_rate_limit: RateLimitConfig,
 ) -> Router {
@@ -58,10 +63,13 @@ pub fn router(
         .merge(session::routes(sessions.clone(), audit.clone()))
         .merge(audit::routes(audit.clone(), sessions.clone()));
     if let Some((oauth, redirects)) = oauth {
-        router = router.merge(oauth::routes(oauth, sessions, audit, redirects));
+        router = router.merge(oauth::routes(oauth, sessions.clone(), audit, redirects));
     }
     if let Some(webhooks) = webhooks {
         router = router.merge(payments_webhook::routes(webhooks));
+    }
+    if let Some(transactions) = transactions {
+        router = router.merge(transactions::routes(transactions, sessions.clone()));
     }
     router.layer(cors::layer(cors_allowed_origins))
 }

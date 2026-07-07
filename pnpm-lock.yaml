@@ -44,6 +44,9 @@ importers:
       '@auth-app/feature-kit':
         specifier: workspace:*
         version: link:../../packages/feature-kit
+      '@auth-app/feature-transactions':
+        specifier: workspace:*
+        version: link:../../packages/feature-transactions
       '@auth-app/feature-users':
         specifier: workspace:*
         version: link:../../packages/feature-users
@@ -108,6 +111,31 @@ importers:
       '@solidjs/router':
         specifier: ^0.15.3
         version: 0.15.4(solid-js@1.9.14)
+      solid-js:
+        specifier: ^1.9.5
+        version: 1.9.14
+
+  packages/feature-transactions:
+    dependencies:
+      '@auth-app/api-client':
+        specifier: workspace:*
+        version: link:../api-client
+      '@auth-app/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@auth-app/query':
+        specifier: workspace:*
+        version: link:../query
+      '@auth-app/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@solidjs/router':
+        specifier: ^0.15.3
+        version: 0.15.4(solid-js@1.9.14)
+      '@tanstack/solid-query':
+        specifier: ^5.62.0
+        version: 5.101.2(solid-js@1.9.14)
       solid-js:
         specifier: ^1.9.5
         version: 1.9.14

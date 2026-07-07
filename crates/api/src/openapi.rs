@@ -6,9 +6,10 @@
 //! [`ApiDoc`] to JSON, and the monorepo generates the TypeScript client from
 //! that spec, so front and back share one source of truth.
 //!
-//! The spec covers the JSON API a typed client consumes (auth, audit, health).
-//! The OAuth endpoints are browser redirects and the payment webhook is
-//! provider-facing, so neither is a typed-client surface and both are left out.
+//! The spec covers the JSON API a typed client consumes (auth, audit, health,
+//! transactions). The OAuth endpoints are browser redirects and the payment
+//! webhook is provider-facing, so neither is a typed-client surface and both
+//! are left out.
 
 use utoipa::OpenApi;
 
@@ -26,16 +27,25 @@ use utoipa::OpenApi;
         crate::session::me_handler,
         crate::session::logout_handler,
         crate::audit::list_events,
+        crate::transactions::list_transactions,
+        crate::transactions::get_transaction,
+        crate::transactions::refund_transaction,
     ),
     components(schemas(
         crate::auth::LoginBody,
         crate::auth::LoginOk,
         crate::session::MeOut,
         crate::audit::EventOut,
+        crate::transactions::TransactionOut,
+        crate::transactions::TransactionPage,
+        crate::transactions::StatusChangeOut,
+        crate::transactions::TransactionDetailOut,
+        crate::transactions::RefundOut,
     )),
     tags(
         (name = "auth", description = "Sign-in, session, and identity"),
         (name = "audit", description = "Authentication audit trail"),
+        (name = "transactions", description = "Payment transactions and refunds"),
         (name = "health", description = "Readiness probe"),
     ),
 )]
@@ -64,10 +74,14 @@ mod tests {
             "/auth/me",
             "/auth/logout",
             "/audit/events",
+            "/transactions",
+            "/transactions/{id}",
+            "/transactions/{id}/refund",
         ] {
             assert!(json.contains(path), "spec is missing {path}");
         }
         // A schema the client's types come from.
         assert!(json.contains("LoginOk"));
+        assert!(json.contains("TransactionPage"));
     }
 }

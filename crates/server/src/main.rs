@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use application::{
     AuditService, BootstrapOutcome, BootstrapService, HealthService, LoginService,
-    OAuthLoginService, SessionService, WebhookService,
+    OAuthLoginService, PaymentsService, SessionService, WebhookService,
 };
 use contracts::{InMemoryExecutor, ModuleRegistry};
 use infrastructure::{
@@ -140,13 +140,13 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     // Select the active payment provider by env (fake for local dev, stripe in
     // production) — no domain/application logic recompiles when it changes. The
     // payment webhook endpoint is enabled for Stripe once its signing secret is
-    // set; the provider handle itself feeds the admin transactions API in a
-    // follow-up bead. Building both here proves the env selection and validates
-    // the configuration at startup.
+    // set; the provider handle feeds the admin transactions API (bead
+    // authapp-a18fa6). Building these here proves the env selection and
+    // validates the configuration at startup.
     let payment_config = PaymentProviderConfig::from_env()?;
     println!("payments: provider = {}", payment_config.label());
     #[allow(clippy::type_complexity)]
-    let (_payment_provider, webhooks): (
+    let (payment_provider, webhooks): (
         Option<Arc<dyn payments::PaymentProvider>>,
         Option<WebhookService>,
     ) = match payment_config {
@@ -170,6 +170,13 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // The admin transactions surface is mounted only when a provider is
+    // configured — a refund needs one. It reads through the same Postgres
+    // payment repository the webhook writes.
+    let transactions = payment_provider.map(|provider| {
+        PaymentsService::new(Arc::new(PgPaymentRepository::new(pool.clone())), provider)
+    });
+
     let app = modules.router(api::router(
         health,
         login,
@@ -177,6 +184,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         audit,
         oauth,
         webhooks,
+        transactions,
         config.cors_allowed_origins(),
         auth.login_rate_limit,
     ));

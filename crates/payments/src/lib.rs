@@ -17,8 +17,9 @@ mod webhook;
 
 pub use money::{Currency, CurrencyError, Money, MoneyError};
 pub use payment::{
-    NewPayment, Payment, PaymentId, PaymentRepository, PaymentRepositoryError, PaymentStatus,
-    PaymentStatusChange, PaymentStatusError, ProviderReference,
+    NewPayment, Payment, PaymentId, PaymentPage, PaymentQuery, PaymentRepository,
+    PaymentRepositoryError, PaymentStatus, PaymentStatusChange, PaymentStatusError,
+    ProviderReference,
 };
 pub use provider::{PaymentProvider, ProviderError, ProviderIntent};
 pub use webhook::{

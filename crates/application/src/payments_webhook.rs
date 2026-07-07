@@ -242,6 +242,18 @@ mod tests {
         ) -> Result<Vec<PaymentStatusChange>, PaymentRepositoryError> {
             unimplemented!()
         }
+        async fn list(
+            &self,
+            _query: &payments::PaymentQuery,
+        ) -> Result<Vec<Payment>, PaymentRepositoryError> {
+            unimplemented!()
+        }
+        async fn count(
+            &self,
+            _query: &payments::PaymentQuery,
+        ) -> Result<u64, PaymentRepositoryError> {
+            unimplemented!()
+        }
     }
 
     fn payment(reference: &str, status: PaymentStatus) -> Payment {

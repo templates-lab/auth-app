@@ -19,6 +19,7 @@ export default defineConfig({
     exclude: [
       "@auth-app/feature-dashboard",
       "@auth-app/feature-users",
+      "@auth-app/feature-transactions",
       "@auth-app/feature-kit",
       "@auth-app/query",
     ],

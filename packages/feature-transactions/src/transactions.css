@@ -1,0 +1,115 @@
+/*
+ * Styles specific to the transactions feature. Scoped to `txn-*` class names so
+ * they compose with the shell's global admin styles without colliding, and they
+ * lean on the shell's theme tokens (see apps/web/src/shell/theme.css) so light
+ * and dark themes both work without extra rules here.
+ */
+
+.txn-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.txn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #667);
+}
+
+.txn-field select,
+.txn-field input {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border, #d0d5dd);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #101828);
+  font: inherit;
+}
+
+.txn-pager {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.txn-pager button,
+.txn-actions button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--color-border, #d0d5dd);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #101828);
+  font: inherit;
+  cursor: pointer;
+}
+
+.txn-pager button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  border-color: var(--color-danger, #d92d20) !important;
+  color: var(--color-danger, #d92d20) !important;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.txn-muted {
+  color: var(--color-text-muted, #667);
+}
+
+.txn-error {
+  color: var(--color-danger, #d92d20);
+}
+
+.txn-ok {
+  color: var(--color-success, #12805c);
+}
+
+.txn-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.txn-dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem 1.5rem;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.txn-dl dt {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #667);
+  margin-bottom: 0.2rem;
+}
+
+.txn-dl dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.txn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.txn-section {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}

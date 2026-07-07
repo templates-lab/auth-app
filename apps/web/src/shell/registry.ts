@@ -1,6 +1,7 @@
 import type { FeatureModule } from "@auth-app/feature-kit";
 import { dashboardFeature } from "@auth-app/feature-dashboard";
 import { usersFeature } from "@auth-app/feature-users";
+import { transactionsFeature } from "@auth-app/feature-transactions";
 
 /**
  * The features mounted into the shell, in registration order.
@@ -9,4 +10,4 @@ import { usersFeature } from "@auth-app/feature-users";
  * feature: create its package, add it as a dependency of `@auth-app/web`, then
  * import and list it here. No existing feature — and no layout code — changes.
  */
-export const features: FeatureModule[] = [dashboardFeature, usersFeature];
+export const features: FeatureModule[] = [dashboardFeature, usersFeature, transactionsFeature];

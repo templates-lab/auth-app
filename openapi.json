@@ -161,6 +161,183 @@
           }
         }
       }
+    },
+    "/transactions": {
+      "get": {
+        "tags": [
+          "transactions"
+        ],
+        "summary": "Handle `GET /transactions`: a filtered, paginated payment list, newest\nfirst.",
+        "operationId": "list_transactions",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only payments in this status (e.g. `captured`, `refunded`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "description": "Only payments created at or after this Unix epoch second (inclusive).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "description": "Only payments created strictly before this Unix epoch second.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 50, capped at 200).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Rows to skip, for paging (default 0).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status filter"
+          },
+          "401": {
+            "description": "No valid session"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
+    "/transactions/{id}": {
+      "get": {
+        "tags": [
+          "transactions"
+        ],
+        "summary": "Handle `GET /transactions/{id}`: one payment with its full status history.",
+        "operationId": "get_transaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The payment id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payment and its status history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionDetailOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session"
+          },
+          "404": {
+            "description": "No such payment"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
+    "/transactions/{id}/refund": {
+      "post": {
+        "tags": [
+          "transactions"
+        ],
+        "summary": "Handle `POST /transactions/{id}/refund`: refund a captured payment in full.\nAdmin-only (via [`require_role`]) and CSRF-checked (via [`require_session`]).",
+        "operationId": "refund_transaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The payment id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Refunded; the payment's new status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session"
+          },
+          "403": {
+            "description": "Not the admin role, or missing/mismatched CSRF"
+          },
+          "404": {
+            "description": "No such payment"
+          },
+          "409": {
+            "description": "Payment is not in a refundable state"
+          },
+          "422": {
+            "description": "The provider declined the refund"
+          },
+          "500": {
+            "description": "Internal error"
+          },
+          "502": {
+            "description": "The provider was unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -265,6 +442,161 @@
             "description": "The administrator's role (e.g. `admin`)."
           }
         }
+      },
+      "RefundOut": {
+        "type": "object",
+        "description": "The result of a successful refund.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The status the payment moved to (`refunded` or `partially_refunded`)."
+          }
+        }
+      },
+      "StatusChangeOut": {
+        "type": "object",
+        "description": "One recorded status change in a payment's history.",
+        "required": [
+          "to",
+          "occurred_at_epoch"
+        ],
+        "properties": {
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The prior status, or `null` for the row recording creation."
+          },
+          "occurred_at_epoch": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the transition happened, as Unix epoch seconds.",
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An optional human-readable reason (a decline code, `admin_refund`, ...)."
+          },
+          "to": {
+            "type": "string",
+            "description": "The status moved to."
+          }
+        }
+      },
+      "TransactionDetailOut": {
+        "type": "object",
+        "description": "A payment with its full status history — the detail view's payload.",
+        "required": [
+          "transaction",
+          "history"
+        ],
+        "properties": {
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusChangeOut"
+            },
+            "description": "Every recorded status change, oldest first."
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/TransactionOut",
+            "description": "The payment itself."
+          }
+        }
+      },
+      "TransactionOut": {
+        "type": "object",
+        "description": "One payment row, as returned to the admin panel.",
+        "required": [
+          "id",
+          "amount_minor_units",
+          "currency",
+          "status",
+          "created_at_epoch",
+          "updated_at_epoch"
+        ],
+        "properties": {
+          "amount_minor_units": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The amount, in the currency's minor units (e.g. cents) — never a float."
+          },
+          "created_at_epoch": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the payment was created, as Unix epoch seconds.",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 currency code (`USD`, ...)."
+          },
+          "id": {
+            "type": "string",
+            "description": "The payment's opaque id (its primary key)."
+          },
+          "provider_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The provider's reference, once one exists."
+          },
+          "status": {
+            "type": "string",
+            "description": "The current status (`created`, `captured`, `refunded`, ...)."
+          },
+          "updated_at_epoch": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the payment's status last changed, as Unix epoch seconds.",
+            "minimum": 0
+          }
+        }
+      },
+      "TransactionPage": {
+        "type": "object",
+        "description": "One page of transactions plus the total matching the filter.",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "description": "The payments on this page, newest first."
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The page size that was applied (after capping).",
+            "minimum": 0
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The offset that was applied.",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total payments matching the filter across all pages.",
+            "minimum": 0
+          }
+        }
       }
     }
   },
@@ -276,6 +608,10 @@
     {
       "name": "audit",
       "description": "Authentication audit trail"
+    },
+    {
+      "name": "transactions",
+      "description": "Payment transactions and refunds"
     },
     {
       "name": "health",
