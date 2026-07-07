@@ -211,6 +211,28 @@ async fn start_redirects_to_the_provider_with_pkce_and_state() {
 }
 
 #[tokio::test]
+async fn providers_lists_the_configured_provider_ids() {
+    let db = testkit::spawn_test_db().await;
+    let app = router(db.pool.clone()).await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/auth/oauth/providers")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["providers"], serde_json::json!(["google"]));
+}
+
+#[tokio::test]
 async fn start_for_an_unknown_provider_is_404() {
     let db = testkit::spawn_test_db().await;
     let app = router(db.pool.clone()).await;

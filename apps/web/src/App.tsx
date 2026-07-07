@@ -1,9 +1,10 @@
-import { Router } from "@solidjs/router";
+import { Route, Router } from "@solidjs/router";
 import type { Component } from "solid-js";
 import { createApiClient } from "@auth-app/api-client";
 import { AppQueryProvider, redirectToLoginOnUnauthorized } from "@auth-app/query/provider";
 import { AdminLayout } from "./shell/AdminLayout";
 import { FeatureRoutes } from "./shell/routes";
+import { Login } from "./auth/Login";
 
 /**
  * The single api-client instance every feature's queries fetch through. It is
@@ -14,10 +15,10 @@ const api = createApiClient();
 
 /**
  * The application shell. It provides the shared TanStack Query client (with the
- * global 401 → logout+redirect interceptor), wraps every route in the admin
- * layout, and mounts the routes contributed by feature packages. It has no
- * knowledge of any specific feature — features are discovered through the shell
- * registry.
+ * global 401 → logout+redirect interceptor) and defines the two route groups:
+ * the chrome-less `/login` screen, and everything else nested under the admin
+ * layout. Feature routes are discovered through the shell registry — the shell
+ * has no knowledge of any specific feature.
  */
 export const App: Component = () => {
   return (
@@ -26,7 +27,12 @@ export const App: Component = () => {
         logout: () => api.POST("/auth/logout"),
       })}
     >
-      <Router root={AdminLayout}>{FeatureRoutes()}</Router>
+      <Router>
+        <Route path="/login" component={Login} />
+        <Route path="/" component={AdminLayout}>
+          {FeatureRoutes()}
+        </Route>
+      </Router>
     </AppQueryProvider>
   );
 };

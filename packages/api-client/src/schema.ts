@@ -97,6 +97,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/oauth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `GET /auth/oauth/providers`: list the enabled provider ids. Public — the
+         *     login page calls it before any session exists.
+         */
+        get: operations["providers_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -229,6 +249,15 @@ export interface components {
             admin_id: string;
             /** @description The administrator's role (e.g. `admin`). */
             role: string;
+        };
+        /** @description The configured OAuth providers, for the login UI to render a button per one. */
+        ProvidersOut: {
+            /**
+             * @description The enabled provider ids (e.g. `["google"]`), sorted. Empty when OAuth
+             *     is configured but has no providers; the whole route is absent (`404`)
+             *     when OAuth is disabled entirely — the UI treats both as "no providers".
+             */
+            providers: string[];
         };
         /** @description The result of a successful refund. */
         RefundOut: {
@@ -456,6 +485,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    providers_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The enabled OAuth provider ids */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvidersOut"];
+                };
             };
         };
     };

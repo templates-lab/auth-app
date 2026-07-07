@@ -10,10 +10,10 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
-use axum::Router;
+use axum::{Json, Router};
 use axum_extra::extract::cookie::CookieJar;
 use domain::{AdminId, AuditEventType, NewAuditEvent};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 use crate::auth::ClientIp;
@@ -40,7 +40,7 @@ impl Default for OAuthRedirects {
 
 /// State shared by the OAuth routes.
 #[derive(Clone)]
-struct OAuthState {
+pub(crate) struct OAuthState {
     oauth: OAuthLoginService,
     sessions: SessionService,
     audit: AuditService,
@@ -55,6 +55,7 @@ pub fn routes(
     redirects: OAuthRedirects,
 ) -> Router {
     Router::new()
+        .route("/auth/oauth/providers", get(providers_handler))
         .route("/auth/oauth/{provider}/start", get(start_handler))
         .route("/auth/oauth/{provider}/callback", get(callback_handler))
         .with_state(OAuthState {
@@ -63,6 +64,32 @@ pub fn routes(
             audit,
             redirects,
         })
+}
+
+/// The configured OAuth providers, for the login UI to render a button per one.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ProvidersOut {
+    /// The enabled provider ids (e.g. `["google"]`), sorted. Empty when OAuth
+    /// is configured but has no providers; the whole route is absent (`404`)
+    /// when OAuth is disabled entirely — the UI treats both as "no providers".
+    providers: Vec<String>,
+}
+
+/// `GET /auth/oauth/providers`: list the enabled provider ids. Public — the
+/// login page calls it before any session exists.
+#[utoipa::path(
+    get,
+    path = "/auth/oauth/providers",
+    responses(
+        (status = 200, description = "The enabled OAuth provider ids", body = ProvidersOut),
+    ),
+    tag = "auth",
+)]
+pub(crate) async fn providers_handler(State(state): State<OAuthState>) -> Response {
+    Json(ProvidersOut {
+        providers: state.oauth.provider_ids(),
+    })
+    .into_response()
 }
 
 /// `GET /auth/oauth/{provider}/start`: redirect the browser to the provider's

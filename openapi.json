@@ -144,6 +144,27 @@
         }
       }
     },
+    "/auth/oauth/providers": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "`GET /auth/oauth/providers`: list the enabled provider ids. Public — the\nlogin page calls it before any session exists.",
+        "operationId": "providers_handler",
+        "responses": {
+          "200": {
+            "description": "The enabled OAuth provider ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvidersOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -440,6 +461,22 @@
           "role": {
             "type": "string",
             "description": "The administrator's role (e.g. `admin`)."
+          }
+        }
+      },
+      "ProvidersOut": {
+        "type": "object",
+        "description": "The configured OAuth providers, for the login UI to render a button per one.",
+        "required": [
+          "providers"
+        ],
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The enabled provider ids (e.g. `[\"google\"]`), sorted. Empty when OAuth\nis configured but has no providers; the whole route is absent (`404`)\nwhen OAuth is disabled entirely — the UI treats both as \"no providers\"."
           }
         }
       },

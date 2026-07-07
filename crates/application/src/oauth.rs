@@ -97,6 +97,14 @@ impl OAuthLoginService {
         self.providers.contains_key(provider)
     }
 
+    /// The configured provider ids, sorted for a stable order — the login UI
+    /// renders one sign-in button per id it gets back.
+    pub fn provider_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.providers.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
     fn provider(&self, provider: &ProviderId) -> Result<&Arc<dyn OAuthProvider>, OAuthError> {
         self.providers
             .get(provider.as_str())

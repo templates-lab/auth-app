@@ -1,0 +1,124 @@
+/*
+ * The sign-in screen: a single centered card, deliberately free of the admin
+ * chrome. Leans on the shell theme tokens (apps/web/src/shell/theme.css) so it
+ * matches the app and works in light and dark themes.
+ */
+
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: var(--color-bg, #f5f6f8);
+}
+
+.login__card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem;
+  border: 1px solid var(--color-border, #e4e7ec);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-surface, #fff);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(16, 24, 40, 0.08));
+}
+
+.login__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--color-text, #101828);
+}
+
+.login__mark {
+  color: var(--color-accent, #4338ca);
+}
+
+.login__title {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--color-text, #101828);
+}
+
+.login__alert {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-danger-bg, #fef3f2);
+  color: var(--color-danger, #b42318);
+  font-size: 0.9rem;
+}
+
+.login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #475467);
+}
+
+.login__field input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border, #d0d5dd);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #101828);
+  font: inherit;
+}
+
+.login__submit {
+  margin-top: 0.25rem;
+  padding: 0.6rem 0.9rem;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-accent, #4338ca);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login__submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-text-muted, #667);
+  font-size: 0.8rem;
+}
+
+.login__divider::before,
+.login__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border, #e4e7ec);
+}
+
+.login__providers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.login__provider {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--color-border, #d0d5dd);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #101828);
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+}
+
+.login__provider:hover {
+  border-color: var(--color-accent, #4338ca);
+}
