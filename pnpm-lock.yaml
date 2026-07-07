@@ -47,12 +47,18 @@ importers:
       '@auth-app/feature-users':
         specifier: workspace:*
         version: link:../../packages/feature-users
+      '@auth-app/query':
+        specifier: workspace:*
+        version: link:../../packages/query
       '@auth-app/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@solidjs/router':
         specifier: ^0.15.3
         version: 0.15.4(solid-js@1.9.14)
+      '@tanstack/solid-query':
+        specifier: ^5.62.0
+        version: 5.101.2(solid-js@1.9.14)
       solid-js:
         specifier: ^1.9.5
         version: 1.9.14
@@ -121,6 +127,22 @@ importers:
       solid-js:
         specifier: ^1.9.5
         version: 1.9.14
+
+  packages/query:
+    dependencies:
+      '@tanstack/solid-query':
+        specifier: ^5.62.0
+        version: 5.101.2(solid-js@1.9.14)
+    devDependencies:
+      solid-js:
+        specifier: ^1.9.5
+        version: 1.9.14
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9
 
   packages/shared: {}
 
@@ -714,6 +736,14 @@ packages:
     resolution: {integrity: sha512-WOpgg9a9T638cR+5FGbFi/IV4l2FpmBs1GpIMSPa0Ce9vyJN7Wts+X2PqMf9IYn0zUj2MlSJtm1gp7/HI/n5TQ==}
     peerDependencies:
       solid-js: ^1.8.6
+
+  '@tanstack/query-core@5.101.2':
+    resolution: {integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==}
+
+  '@tanstack/solid-query@5.101.2':
+    resolution: {integrity: sha512-IbCeM23gEbU0lW4wWFQhS4ELjgdmVXjhyCUh8pFemdMIuA5UswlkqEMryEE+lCMtxLS7m0oN1yWMocKi7vwXdw==}
+    peerDependencies:
+      solid-js: ^1.6.0
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -2035,6 +2065,13 @@ snapshots:
 
   '@solidjs/router@0.15.4(solid-js@1.9.14)':
     dependencies:
+      solid-js: 1.9.14
+
+  '@tanstack/query-core@5.101.2': {}
+
+  '@tanstack/solid-query@5.101.2(solid-js@1.9.14)':
+    dependencies:
+      '@tanstack/query-core': 5.101.2
       solid-js: 1.9.14
 
   '@types/babel__core@7.20.5':
