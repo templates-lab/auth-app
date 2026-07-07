@@ -1,6 +1,7 @@
 /* @refresh reload */
 import { render } from "solid-js/web";
 import { App } from "./App";
+import "./shell/theme.css";
 import "./shell/admin.css";
 
 const container = document.getElementById("root");

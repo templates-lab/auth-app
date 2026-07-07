@@ -68,6 +68,28 @@ code changes, satisfying the open/closed boundary between features.
 Feature packages ship Solid source (`.tsx`) consumed directly by the app's Vite
 build (`vite-plugin-solid`); only `shared` and `feature-kit` compile to `dist`.
 
+### Theming, build, and serving
+
+- **Design tokens** live in `apps/web/src/shell/theme.css` — the single source
+  of truth for the app's colours, spacing, radii, shadows, and type. Two
+  layers: raw *primitives* (palette + scales) and the *semantic tokens*
+  (`--color-bg`, `--space-4`, ...) that components actually reference. Nothing
+  else hard-codes a visual constant, so re-theming is editing that one file. A
+  **dark theme** ships alongside light, applied by the OS preference
+  (`prefers-color-scheme`) or forced by a `data-theme` attribute on `<html>`
+  (so a future in-app toggle wins over the OS).
+- **Route code-splitting** — each feature `lazy`-loads its route component, so
+  Vite emits one chunk per route (`Dashboard-*.js`, `Users-*.js`) and the
+  shell's initial bundle stays small; a feature's view is fetched on first
+  visit.
+- **SPA fallback behind Traefik** — the production build (`pnpm --filter
+  @auth-app/web build`) is static files served by nginx
+  (`infra/web/nginx.conf`) sitting behind Traefik's `web` router. Client
+  routes like `/users` have no file on disk, so `try_files $uri $uri/
+  /index.html` hands any unmatched path to `@solidjs/router`; hashed assets are
+  cached `immutable` for a year while `index.html` is `no-cache` so a deploy is
+  picked up immediately.
+
 ## Requirements
 
 - Node.js >= 20

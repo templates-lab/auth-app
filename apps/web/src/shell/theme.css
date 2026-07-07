@@ -1,0 +1,109 @@
+/*
+ * Design tokens — the single source of truth for the admin app's visual
+ * language (bead authapp-d13578). Everything else (admin.css, feature views)
+ * consumes these semantic variables and never hard-codes a colour, radius, or
+ * spacing value, so re-theming the whole app is editing this one file.
+ *
+ * Two layers:
+ *   1. PRIMITIVES — the raw palette and scales. Not used directly by
+ *      components; they exist so the semantic tokens below stay consistent.
+ *   2. SEMANTIC TOKENS — what components actually reference (`--color-bg`,
+ *      `--space-4`, ...). Swapping a primitive re-flows every semantic token
+ *      that derives from it.
+ *
+ * Light is the default; dark is provided both via the OS preference
+ * (`prefers-color-scheme`) and an explicit `data-theme` attribute on <html>,
+ * so a future in-app toggle can force either mode and win over the OS.
+ */
+
+:root {
+  /* --- Primitives: palette ------------------------------------------- */
+  --gray-0: #ffffff;
+  --gray-50: #f4f5f7;
+  --gray-100: #e3e6ea;
+  --gray-300: #c7cdd6;
+  --gray-500: #6b7686;
+  --gray-800: #1b2430;
+  --gray-900: #10141c;
+  --blue-500: #4c6ef5;
+  --green-600: #1f8a54;
+  --green-500-a: rgba(34, 160, 96, 0.14);
+  --blue-500-a: rgba(76, 110, 245, 0.12);
+
+  /* --- Primitives: scales -------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-pill: 999px;
+  --font-sans:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+
+  /* --- Semantic tokens: light (default) ------------------------------ */
+  color-scheme: light;
+  --color-bg: var(--gray-50);
+  --color-surface: var(--gray-0);
+  --color-sidebar: var(--gray-900);
+  --color-sidebar-fg: var(--gray-300);
+  --color-sidebar-fg-strong: var(--gray-0);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.06);
+  --color-border: var(--gray-100);
+  --color-text: var(--gray-800);
+  --color-muted: var(--gray-500);
+  --color-accent: var(--blue-500);
+  --color-accent-fg: #ffffff;
+  --color-accent-soft: var(--blue-500-a);
+  --color-success: var(--green-600);
+  --color-success-soft: var(--green-500-a);
+  --color-muted-soft: rgba(107, 118, 134, 0.16);
+  --shadow: 0 1px 2px rgba(16, 20, 28, 0.06), 0 4px 16px rgba(16, 20, 28, 0.05);
+  --scrim: rgba(16, 20, 28, 0.45);
+
+  /* --- Layout constants ---------------------------------------------- */
+  --sidebar-width: 240px;
+  --topbar-height: 60px;
+}
+
+/* Semantic tokens: dark. Applied when the OS prefers dark AND the app has not
+   explicitly forced light. The `[data-theme]` overrides below let an in-app
+   toggle win in either direction. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #0c0f15;
+    --color-surface: #141922;
+    --color-sidebar: #0a0d13;
+    --color-sidebar-fg: var(--gray-300);
+    --color-sidebar-fg-strong: var(--gray-0);
+    --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+    --color-border: #232a35;
+    --color-text: #e7ebf0;
+    --color-muted: #9099a8;
+    --color-accent-soft: rgba(76, 110, 245, 0.2);
+    --color-muted-soft: rgba(144, 153, 168, 0.18);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 20px rgba(0, 0, 0, 0.35);
+    --scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Explicit dark, forced regardless of OS preference. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0c0f15;
+  --color-surface: #141922;
+  --color-sidebar: #0a0d13;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-border: #232a35;
+  --color-text: #e7ebf0;
+  --color-muted: #9099a8;
+  --color-accent-soft: rgba(76, 110, 245, 0.2);
+  --color-muted-soft: rgba(144, 153, 168, 0.18);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 20px rgba(0, 0, 0, 0.35);
+  --scrim: rgba(0, 0, 0, 0.6);
+}
