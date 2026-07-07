@@ -207,6 +207,8 @@ present-but-unparseable value fails fast at startup.
 | `ARGON2_PARALLELISM`               | `1`     | argon2id parallelism               |
 | `SESSION_IDLE_TIMEOUT_SECS`        | `1800`  | Session dies after this much inactivity |
 | `SESSION_ABSOLUTE_TIMEOUT_SECS`    | `43200` | Session dies this long after login, regardless of activity |
+| `LOGIN_RATE_LIMIT_MAX_REQUESTS`    | `10`    | Login attempts allowed per window, per IP and per account |
+| `LOGIN_RATE_LIMIT_WINDOW_SECS`     | `60`    | The login rate limit's window duration |
 
 ## Payments
 
@@ -253,5 +255,26 @@ Two layers, split by what each is good at:
 A single-origin deployment (the default Traefik routing — web on `/`, API on
 `/api`, same host) needs `CORS_ALLOWED_ORIGINS` unset: same-origin requests
 are never subject to CORS in the first place.
+
+## Rate limiting
+
+Two layers again:
+
+- **Traefik** (`infra/traefik/dynamic/middlewares.yml`, `api-ratelimit`)
+  applies a blunt, global limit across the whole API (~50 req/s per client
+  IP, bursting to 100) — it protects the service regardless of route, but it
+  cannot see the request body.
+- **The app** (`crates/api/src/rate_limit.rs`) adds a finer-grained,
+  in-memory, fixed-window limiter for `/auth/login`, applied *independently*
+  per client IP and per submitted account email (`LOGIN_RATE_LIMIT_MAX_REQUESTS`
+  per `LOGIN_RATE_LIMIT_WINDOW_SECS`, defaults `10`/`60`). This is a distinct
+  mechanism from the account/IP *lockout* in [Admin authentication](#admin-authentication):
+  lockout only counts failed attempts and persists in Postgres; the rate
+  limiter counts every attempt (successful or not) and lives only in that
+  process's memory — a defense-in-depth layer behind Traefik's shared,
+  cross-replica limit, not a replacement for it. A rejected request is logged
+  (`login: rate limit exceeded for ...`) and answered `429` with
+  `Retry-After`, before any credential work happens. The same `RateLimiter`
+  type is meant to be reused for payment webhooks once that endpoint exists.
 
 [`PaymentProvider`]: crates/payments/src/provider.rs

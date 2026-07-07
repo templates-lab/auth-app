@@ -104,6 +104,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         login,
         sessions,
         config.cors_allowed_origins(),
+        auth.login_rate_limit,
     ));
 
     // 6. Serve. `into_make_service_with_connect_info` records each connection's

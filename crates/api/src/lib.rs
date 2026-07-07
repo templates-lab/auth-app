@@ -10,7 +10,10 @@ use domain::Readiness;
 
 pub mod auth;
 pub mod cors;
+pub mod rate_limit;
 pub mod session;
+
+use rate_limit::RateLimitConfig;
 
 /// Build the HTTP router, injecting the application services as state.
 ///
@@ -24,10 +27,11 @@ pub fn router(
     login: LoginService,
     sessions: SessionService,
     cors_allowed_origins: &[String],
+    login_rate_limit: RateLimitConfig,
 ) -> Router {
     Router::new()
         .merge(health_routes(health))
-        .merge(auth::routes(login, sessions.clone()))
+        .merge(auth::routes(login, sessions.clone(), login_rate_limit))
         .merge(session::routes(sessions))
         .layer(cors::layer(cors_allowed_origins))
 }

@@ -30,7 +30,13 @@ tower-http.workspace = true
 
 # Test-only: `ServiceExt::oneshot` drives the router directly in cors.rs's own
 # HTTP-level tests, without binding a real socket; `tokio` provides the
-# `#[tokio::test]` runtime.
+# `#[tokio::test]` runtime. `infrastructure`/`testkit` back the
+# `tests/login_rate_limit_it.rs` end-to-end suite with a real, ephemeral
+# Postgres instead of fakes.
 [dev-dependencies]
 tower.workspace = true
 tokio.workspace = true
+infrastructure.workspace = true
+testkit.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true

@@ -8,6 +8,8 @@
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 use application::{LoginError, LoginRequest, LoginService, SessionService};
 use axum::extract::{ConnectInfo, FromRequestParts, State};
@@ -19,21 +21,36 @@ use axum::{Json, Router};
 use axum_extra::extract::cookie::CookieJar;
 use serde::{Deserialize, Serialize};
 
+use crate::rate_limit::{RateLimitConfig, RateLimiter};
 use crate::session::attach_session_cookies;
 
-/// State for the login route: the credential check and the session issuer a
-/// successful login hands off to.
+/// State for the login route: the credential check, the session issuer a
+/// successful login hands off to, and the app-level rate limiter guarding the
+/// route independently of Traefik's edge-wide limit.
 #[derive(Clone)]
 struct LoginState {
     login: LoginService,
     sessions: SessionService,
+    rate_limit: Arc<RateLimiter>,
 }
 
 /// Mount the auth routes with the login and session services as their state.
-pub fn routes(login: LoginService, sessions: SessionService) -> Router {
+///
+/// `rate_limit` caps login attempts per client IP *and*, independently, per
+/// submitted account email — Traefik's edge limit sees neither the parsed
+/// body nor per-route semantics, so per-account limiting has to live here.
+pub fn routes(
+    login: LoginService,
+    sessions: SessionService,
+    rate_limit: RateLimitConfig,
+) -> Router {
     Router::new()
         .route("/auth/login", post(login_handler))
-        .with_state(LoginState { login, sessions })
+        .with_state(LoginState {
+            login,
+            sessions,
+            rate_limit: Arc::new(RateLimiter::new(rate_limit)),
+        })
 }
 
 /// The JSON body of a login request.
@@ -107,16 +124,46 @@ fn forwarded_ip(parts: &Parts) -> Option<String> {
 ///
 /// `200` with the admin id and fresh session/CSRF cookies on success; `401`
 /// for invalid credentials (identical for a wrong password and a nonexistent
-/// account); `429` with `Retry-After` when the account or IP is locked out;
-/// `500` on an internal failure. Every successful login issues a brand-new
-/// session — there is no "reuse the prior session" path — which is what
-/// satisfies session rotation on login.
+/// account); `429` with `Retry-After` when the IP or account has hit the
+/// app-level rate limit, or when the account/IP is locked out (see
+/// [`LoginError::TooManyAttempts`] — a distinct mechanism from the rate limit:
+/// lockout counts *failures*, the rate limit counts *every* attempt); `500` on
+/// an internal failure. Every successful login issues a brand-new session —
+/// there is no "reuse the prior session" path — which is what satisfies
+/// session rotation on login.
 async fn login_handler(
     State(state): State<LoginState>,
     ClientIp(client_ip): ClientIp,
     jar: CookieJar,
     Json(body): Json<LoginBody>,
 ) -> Response {
+    let now = SystemTime::now();
+    // Rate-limit by IP and by the submitted account independently, so an
+    // attacker spraying many accounts from one IP is capped by the IP key,
+    // and one hammering a single account from many IPs is capped by the
+    // account key. Checked before any credential work — a rejected request
+    // costs no argon2 verification and touches no lockout counters.
+    let account_key = format!("acct:{}", body.email.trim().to_ascii_lowercase());
+    for key in [format!("ip:{client_ip}"), account_key] {
+        if let Err(exceeded) = state.rate_limit.check(&key, now) {
+            eprintln!(
+                "login: rate limit exceeded for {key}, retry after {}s",
+                exceeded.retry_after.as_secs()
+            );
+            let mut response = (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorBody {
+                    error: "too_many_attempts",
+                }),
+            )
+                .into_response();
+            if let Ok(value) = HeaderValue::from_str(&exceeded.retry_after.as_secs().to_string()) {
+                response.headers_mut().insert(header::RETRY_AFTER, value);
+            }
+            return response;
+        }
+    }
+
     let request = LoginRequest {
         email: body.email,
         password: body.password,

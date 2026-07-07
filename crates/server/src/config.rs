@@ -4,6 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 
+use api::rate_limit::RateLimitConfig;
 use domain::{LockoutPolicy, PasswordPolicy, SessionPolicy};
 use infrastructure::Argon2Params;
 
@@ -95,6 +96,8 @@ pub(crate) struct AuthConfig {
     pub(crate) lockout_policy: LockoutPolicy,
     /// The session idle/absolute expiration policy.
     pub(crate) session_policy: SessionPolicy,
+    /// The app-level rate limit on login attempts, per IP and per account.
+    pub(crate) login_rate_limit: RateLimitConfig,
 }
 
 impl AuthConfig {
@@ -113,6 +116,11 @@ impl AuthConfig {
     /// Session policy:
     /// - `SESSION_IDLE_TIMEOUT_SECS` (default `1800`, 30 minutes)
     /// - `SESSION_ABSOLUTE_TIMEOUT_SECS` (default `43200`, 12 hours)
+    ///
+    /// Login rate limit (app-level, independent of Traefik's edge limit;
+    /// applied separately per client IP and per submitted account email):
+    /// - `LOGIN_RATE_LIMIT_MAX_REQUESTS` (default `10`)
+    /// - `LOGIN_RATE_LIMIT_WINDOW_SECS` (default `60`)
     ///
     /// Argon2 parameters follow [`Argon2Params::from_env`] (OWASP defaults). A
     /// present-but-unparseable value is an error, never a silent fallback.
@@ -163,11 +171,17 @@ impl AuthConfig {
             )?),
         };
 
+        let login_rate_limit = RateLimitConfig {
+            max_requests: parse_var("LOGIN_RATE_LIMIT_MAX_REQUESTS", 10)?,
+            window: Duration::from_secs(parse_var("LOGIN_RATE_LIMIT_WINDOW_SECS", 60)?),
+        };
+
         Ok(Self {
             argon2,
             password_policy,
             lockout_policy,
             session_policy,
+            login_rate_limit,
         })
     }
 }
