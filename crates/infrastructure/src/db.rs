@@ -37,15 +37,21 @@ pub struct PgConfig {
 impl PgConfig {
     /// Read pool configuration from the environment.
     ///
-    /// - `DATABASE_URL` — connection string (required)
+    /// - `DATABASE_URL` — connection string (required). May instead be supplied
+    ///   as a file via `DATABASE_URL_FILE` (the Docker-secrets convention, where
+    ///   a secret is mounted under `/run/secrets`); the direct variable wins when
+    ///   both are set, and a trailing newline in the file is trimmed.
     /// - `DATABASE_MAX_CONNECTIONS` — pool ceiling (default `10`)
     /// - `DATABASE_MIN_CONNECTIONS` — warm minimum (default `0`)
     /// - `DATABASE_ACQUIRE_TIMEOUT_SECS` — acquire timeout in seconds (default `30`)
     pub fn from_env() -> Result<Self, PgConfigError> {
-        let url = std::env::var("DATABASE_URL").map_err(|_| PgConfigError::MissingUrl)?;
-        if url.trim().is_empty() {
-            return Err(PgConfigError::MissingUrl);
-        }
+        let url = resolve_secret(
+            "DATABASE_URL",
+            std::env::var("DATABASE_URL").ok(),
+            std::env::var("DATABASE_URL_FILE").ok(),
+        )?
+        .filter(|u| !u.trim().is_empty())
+        .ok_or(PgConfigError::MissingUrl)?;
 
         let max_connections = parse_env("DATABASE_MAX_CONNECTIONS", 10)?;
         let min_connections = parse_env("DATABASE_MIN_CONNECTIONS", 0)?;
@@ -58,6 +64,37 @@ impl PgConfig {
             acquire_timeout: Duration::from_secs(acquire_secs),
         })
     }
+}
+
+/// Resolve a secret from a direct value or a `*_FILE` indirection.
+///
+/// `direct` (the `NAME` variable) takes precedence; otherwise the value is read
+/// from the file at `file` (the `NAME_FILE` variable), which is how a Docker
+/// secret — mounted as a file under `/run/secrets` — is consumed. A trailing
+/// newline (as most secret files carry) is trimmed. Returns `None` when neither
+/// is provided; a `NAME_FILE` that cannot be read is a hard error, since a
+/// misconfigured secret should fail fast, not fall through to "missing".
+///
+/// Kept as a pure function (values passed in, not read from the environment) so
+/// it is testable without mutating process-global state.
+fn resolve_secret(
+    name: &str,
+    direct: Option<String>,
+    file: Option<String>,
+) -> Result<Option<String>, PgConfigError> {
+    if let Some(value) = direct.filter(|v| !v.trim().is_empty()) {
+        return Ok(Some(value));
+    }
+    if let Some(path) = file.filter(|p| !p.trim().is_empty()) {
+        let contents =
+            std::fs::read_to_string(&path).map_err(|e| PgConfigError::UnreadableSecretFile {
+                key: format!("{name}_FILE"),
+                path,
+                error: e.to_string(),
+            })?;
+        return Ok(Some(contents.trim_end_matches(['\n', '\r']).to_string()));
+    }
+    Ok(None)
 }
 
 /// Parse an optional environment variable, falling back to `default` when unset.
@@ -103,17 +140,32 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), MigrateError> {
 /// A malformed or missing database environment value.
 #[derive(Debug)]
 pub enum PgConfigError {
-    /// `DATABASE_URL` was unset or empty.
+    /// Neither `DATABASE_URL` nor `DATABASE_URL_FILE` yielded a non-empty value.
     MissingUrl,
     /// A numeric setting was present but could not be parsed.
     InvalidValue { key: String, value: String },
+    /// A `*_FILE` secret indirection pointed at a file that could not be read.
+    UnreadableSecretFile {
+        key: String,
+        path: String,
+        error: String,
+    },
 }
 
 impl fmt::Display for PgConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingUrl => write!(f, "DATABASE_URL is required and must be non-empty"),
+            Self::MissingUrl => write!(
+                f,
+                "DATABASE_URL is required and must be non-empty (or provide DATABASE_URL_FILE)"
+            ),
             Self::InvalidValue { key, value } => write!(f, "invalid {key}: {value:?}"),
+            Self::UnreadableSecretFile { key, path, error } => {
+                write!(
+                    f,
+                    "{key} points at {path:?} which could not be read: {error}"
+                )
+            }
         }
     }
 }
@@ -142,5 +194,55 @@ mod tests {
             versions, sorted,
             "migration versions must be unique and ascending"
         );
+    }
+
+    #[test]
+    fn resolve_secret_prefers_the_direct_value() {
+        let out = resolve_secret(
+            "DATABASE_URL",
+            Some("postgres://direct".to_string()),
+            Some("/does/not/matter".to_string()),
+        )
+        .unwrap();
+        assert_eq!(out.as_deref(), Some("postgres://direct"));
+    }
+
+    #[test]
+    fn resolve_secret_reads_the_file_and_trims_newline() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("authapp-secret-{}.txt", std::process::id()));
+        std::fs::write(&path, "postgres://from-file\n").unwrap();
+
+        let out = resolve_secret(
+            "DATABASE_URL",
+            None,
+            Some(path.to_string_lossy().into_owned()),
+        )
+        .unwrap();
+        assert_eq!(out.as_deref(), Some("postgres://from-file"));
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn resolve_secret_is_none_when_neither_is_provided() {
+        assert!(resolve_secret("DATABASE_URL", None, None)
+            .unwrap()
+            .is_none());
+        // An empty direct value falls through to "none", not to an empty URL.
+        assert!(resolve_secret("DATABASE_URL", Some("  ".to_string()), None)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn resolve_secret_errors_when_the_file_is_unreadable() {
+        let err = resolve_secret(
+            "DATABASE_URL",
+            None,
+            Some("/no/such/secret/file".to_string()),
+        )
+        .unwrap_err();
+        assert!(matches!(err, PgConfigError::UnreadableSecretFile { .. }));
     }
 }

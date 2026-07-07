@@ -1,0 +1,48 @@
+# Production overlay (bead authapp-a8f0ff): versioned images + Docker secrets.
+# Layered explicitly so the dev override never applies:
+#
+#   docker compose -f compose.yml -f compose.prod.yml --profile prod up -d
+#
+# Requires:
+#   API_IMAGE / WEB_IMAGE  versioned, registry-hosted image tags (no local build)
+#   ./secrets/*            secret files (git-ignored; created out of band)
+#
+# Secrets are provided as files and mounted at /run/secrets. Postgres reads its
+# superuser password natively via *_FILE; the API reads its connection string
+# via DATABASE_URL_FILE (see crates/infrastructure/src/db.rs), so no credential
+# is ever passed as a plain environment variable in production.
+name: auth-app
+
+secrets:
+  database_url:
+    file: ./secrets/database_url
+  postgres_superuser_password:
+    file: ./secrets/postgres_superuser_password
+
+services:
+  postgres:
+    environment:
+      # Native Docker-secret support in the postgres image: the superuser
+      # password comes from the mounted file, not the environment.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets:
+      - postgres_superuser_password
+
+  api:
+    # A versioned, immutable image — never a local build in production.
+    image: ${API_IMAGE:?set API_IMAGE to a versioned image tag for prod}
+    environment:
+      # Blank the plain-text URL the dev wiring set and read it from the secret
+      # instead (an empty value falls through to DATABASE_URL_FILE).
+      DATABASE_URL: ""
+      DATABASE_URL_FILE: /run/secrets/database_url
+    secrets:
+      - database_url
+    # The API writes nothing to disk (it logs to stderr), so lock the root
+    # filesystem read-only and give it a small tmpfs for anything transient.
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  web:
+    image: ${WEB_IMAGE:?set WEB_IMAGE to a versioned image tag for prod}

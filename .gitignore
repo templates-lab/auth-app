@@ -30,6 +30,9 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+# Docker-secret files for the prod compose overlay (compose.prod.yml) — real
+# credentials, never committed.
+/secrets/
 
 # gt worktree harness (agent runtime injections; contain tokens — never commit)
 /.claude/

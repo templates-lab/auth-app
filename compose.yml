@@ -1,0 +1,40 @@
+# Root Compose file (bead authapp-a8f0ff): composes the edge, database, and
+# API↔DB wiring into one stack, selectable by profile.
+#
+#   dev:   docker compose --profile dev up --build
+#          Builds the api/web images locally and layers the auto-loaded
+#          compose.override.yml (host ports, an admin-seed one-shot).
+#
+#   prod:  docker compose -f compose.yml -f compose.prod.yml --profile prod up -d
+#          Versioned images (API_IMAGE / WEB_IMAGE) + Docker secrets. The `-f`
+#          list deliberately omits compose.override.yml, so no dev convenience
+#          leaks into production.
+#
+# Two networks stay separated (see the included files): `edge` fronts Traefik and
+# `backend` carries API↔DB traffic. Only Traefik publishes ports to the host; the
+# database lives solely on `backend`, unreachable from `edge`.
+name: auth-app
+
+include:
+  - infra/traefik/docker-compose.yml
+  - infra/postgres/docker-compose.yml
+  - infra/postgres/api.override.yml
+
+services:
+  # Every core service is tagged into both profiles, so a bare `docker compose
+  # up` (no profile) starts nothing and `--profile dev|prod up` brings up the
+  # whole stack. The api/web images are named by a var: dev builds `:local`,
+  # prod overrides it (in compose.prod.yml) with a versioned, registry image.
+  traefik:
+    profiles: ["dev", "prod"]
+
+  postgres:
+    profiles: ["dev", "prod"]
+
+  api:
+    profiles: ["dev", "prod"]
+    image: ${API_IMAGE:-auth-app-api:local}
+
+  web:
+    profiles: ["dev", "prod"]
+    image: ${WEB_IMAGE:-auth-app-web:local}

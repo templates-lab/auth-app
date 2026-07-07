@@ -1,0 +1,40 @@
+# Dev conveniences (bead authapp-a8f0ff). `docker compose` auto-loads this file,
+# so the dev workflow (`docker compose --profile dev up --build`) picks it up;
+# prod passes an explicit `-f compose.yml -f compose.prod.yml` list that omits
+# it. It only ADDS developer affordances — host port publishing and an admin
+# seed — never changing the security posture of the base stack.
+name: auth-app
+
+services:
+  # Publish Postgres to the loopback interface for local `psql`/inspection. This
+  # is an extra host bind for developers; the app still reaches it over the
+  # private `backend` network, and it is never exposed beyond 127.0.0.1.
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # Publish the API directly on the loopback too, so a developer can hit it
+  # without going through Traefik/TLS.
+  api:
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  # One-shot: create the first administrator from env, then exit. Runs once the
+  # database is healthy; `restart: no` so it does not loop after completing.
+  bootstrap:
+    profiles: ["dev"]
+    image: ${API_IMAGE:-auth-app-api:local}
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["bootstrap-admin"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${APP_DB_USER:-authapp_app}:${APP_DB_PASSWORD:?set APP_DB_PASSWORD in your environment}@postgres:5432/${POSTGRES_DB:-authapp}?sslmode=disable
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@example.com}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?set ADMIN_BOOTSTRAP_PASSWORD in your environment}
+    networks:
+      - backend

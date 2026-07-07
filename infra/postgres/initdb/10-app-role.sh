@@ -48,6 +48,13 @@ psql -v ON_ERROR_STOP=1 \
 	ALTER SCHEMA public OWNER TO :"app_user";
 	REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 	GRANT USAGE, CREATE ON SCHEMA public TO :"app_user";
+
+	-- Let the app create new schemas in its own database: a migration adds the
+	-- `payments` bounded-context schema (0004_payments_schema), so the role that
+	-- runs the migrations at startup needs database-level CREATE. This stays
+	-- confined to this one database — the role remains NOSUPERUSER/NOCREATEDB/
+	-- NOCREATEROLE and holds no cluster-wide authority.
+	GRANT CREATE ON DATABASE :"app_db" TO :"app_user";
 	SQL
 
 echo "init: created least-privilege role '${APP_DB_USER}' and granted it ownership of schema public in '${POSTGRES_DB}'"
