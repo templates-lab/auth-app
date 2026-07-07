@@ -6,6 +6,7 @@
 //! lockout) lives in the application and domain layers; this module only speaks
 //! HTTP.
 
+use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -19,9 +20,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use axum_extra::extract::cookie::CookieJar;
-use domain::{AuditEventType, NewAuditEvent};
+use domain::{AuditEventType, Email, NewAuditEvent};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+
+use crate::error::{ApiError, ErrorResponse};
 
 use crate::rate_limit::{RateLimitConfig, RateLimiter};
 use crate::session::attach_session_cookies;
@@ -74,13 +77,6 @@ pub struct LoginBody {
 pub struct LoginOk {
     /// The authenticated administrator's opaque id.
     admin_id: String,
-}
-
-/// A uniform error body. The `error` code is deliberately coarse so it never
-/// distinguishes "no such account" from "wrong password".
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: &'static str,
 }
 
 /// The client's IP address, resolved from proxy headers or the socket.
@@ -150,9 +146,10 @@ fn forwarded_ip(parts: &Parts) -> Option<String> {
     request_body = LoginBody,
     responses(
         (status = 200, description = "Signed in; sets session and csrf cookies", body = LoginOk),
-        (status = 401, description = "Invalid credentials (wrong password or unknown account)"),
-        (status = 429, description = "Rate-limited or locked out; carries Retry-After"),
-        (status = 500, description = "Internal error"),
+        (status = 401, description = "Invalid credentials (wrong password or unknown account)", body = ErrorResponse),
+        (status = 422, description = "Malformed request (per-field validation)", body = ErrorResponse),
+        (status = 429, description = "Rate-limited or locked out; carries Retry-After", body = ErrorResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse),
     ),
     tag = "auth",
 )]
@@ -163,6 +160,24 @@ pub(crate) async fn login_handler(
     jar: CookieJar,
     Json(body): Json<LoginBody>,
 ) -> Response {
+    // Validate the request shape first (AC: validation errors are 422 with
+    // per-field detail). A malformed email or empty password is a request
+    // problem, distinct from — and revealing nothing about — whether any account
+    // exists, so surfacing the field is safe.
+    let mut invalid = BTreeMap::new();
+    if Email::parse(body.email.trim()).is_err() {
+        invalid.insert(
+            "email".to_string(),
+            "must be a valid email address".to_string(),
+        );
+    }
+    if body.password.is_empty() {
+        invalid.insert("password".to_string(), "must not be empty".to_string());
+    }
+    if !invalid.is_empty() {
+        return ApiError::validation(invalid).into_response();
+    }
+
     let now = SystemTime::now();
     let user_agent = headers
         .get(header::USER_AGENT)
@@ -183,13 +198,7 @@ pub(crate) async fn login_handler(
                 "login: rate limit exceeded for {key}, retry after {}s",
                 exceeded.retry_after.as_secs()
             );
-            let mut response = (
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorBody {
-                    error: "too_many_attempts",
-                }),
-            )
-                .into_response();
+            let mut response = too_many_attempts().into_response();
             if let Ok(value) = HeaderValue::from_str(&exceeded.retry_after.as_secs().to_string()) {
                 response.headers_mut().insert(header::RETRY_AFTER, value);
             }
@@ -235,41 +244,28 @@ pub(crate) async fn login_handler(
                     )
                         .into_response()
                 }
-                Err(e) => {
-                    eprintln!("login: failed to issue session: {e}");
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorBody {
-                            error: "internal_error",
-                        }),
-                    )
-                        .into_response()
-                }
+                Err(e) => ApiError::internal(format!("login: failed to issue session: {e}"))
+                    .into_response(),
             }
         }
         Err(LoginError::InvalidCredentials) => {
             if let Err(e) = audit(AuditEventType::LoginFailed, None).await {
                 eprintln!("login: failed to record audit event: {e}");
             }
-            (
+            // Coarse on purpose: identical for a wrong password and an unknown
+            // account, so the response never reveals whether the email exists.
+            ApiError::new(
                 StatusCode::UNAUTHORIZED,
-                Json(ErrorBody {
-                    error: "invalid_credentials",
-                }),
+                "invalid_credentials",
+                "Invalid email or password.",
             )
-                .into_response()
+            .into_response()
         }
         Err(LoginError::TooManyAttempts { retry_after_secs }) => {
             if let Err(e) = audit(AuditEventType::LockedOut, None).await {
                 eprintln!("login: failed to record audit event: {e}");
             }
-            let mut response = (
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorBody {
-                    error: "too_many_attempts",
-                }),
-            )
-                .into_response();
+            let mut response = too_many_attempts().into_response();
             if let Some(secs) = retry_after_secs {
                 if let Ok(value) = HeaderValue::from_str(&secs.to_string()) {
                     response.headers_mut().insert(header::RETRY_AFTER, value);
@@ -279,14 +275,17 @@ pub(crate) async fn login_handler(
         }
         // Details are logged server-side; the client only learns it was our fault.
         Err(LoginError::Internal(msg)) => {
-            eprintln!("login: internal error: {msg}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorBody {
-                    error: "internal_error",
-                }),
-            )
-                .into_response()
+            ApiError::internal(format!("login: internal error: {msg}")).into_response()
         }
     }
+}
+
+/// The `429` returned both by the pre-check rate limiter and by a lockout. The
+/// caller attaches the `Retry-After` header, since its value differs per source.
+fn too_many_attempts() -> ApiError {
+    ApiError::new(
+        StatusCode::TOO_MANY_REQUESTS,
+        "too_many_attempts",
+        "Too many attempts. Please try again later.",
+    )
 }

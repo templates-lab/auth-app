@@ -21,6 +21,7 @@ use serde::Serialize;
 use time::OffsetDateTime;
 
 use crate::auth::ClientIp;
+use crate::error::ApiError;
 
 /// The `HttpOnly` cookie carrying the session bearer token.
 pub const SESSION_COOKIE: &str = "session";
@@ -117,28 +118,15 @@ pub async fn require_session(
 }
 
 fn unauthorized() -> Response {
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(ErrorBody {
-            error: "unauthorized",
-        }),
-    )
-        .into_response()
+    ApiError::unauthorized().into_response()
 }
 
 fn forbidden() -> Response {
-    (
-        StatusCode::FORBIDDEN,
-        Json(ErrorBody {
-            error: "csrf_mismatch",
-        }),
+    ApiError::forbidden(
+        "csrf_mismatch",
+        "The CSRF token is missing or does not match.",
     )
-        .into_response()
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: &'static str,
+    .into_response()
 }
 
 /// Build the `Set-Cookie` pair for a freshly issued session: the `HttpOnly`

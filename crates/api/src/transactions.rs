@@ -8,12 +8,12 @@
 //! requires the `admin` role, enforced by [`require_role`] (AC: reembolso solo
 //! para admin).
 
+use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 
 use application::{PaymentsService, RefundError};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use domain::Role;
@@ -22,6 +22,7 @@ use payments::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::error::{ApiError, ErrorResponse};
 use crate::rbac::require_role;
 use crate::session::require_session;
 
@@ -166,15 +167,6 @@ pub struct RefundOut {
     status: String,
 }
 
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: &'static str,
-}
-
-fn error(status: StatusCode, code: &'static str) -> Response {
-    (status, Json(ErrorBody { error: code })).into_response()
-}
-
 /// Handle `GET /transactions`: a filtered, paginated payment list, newest
 /// first.
 #[utoipa::path(
@@ -183,19 +175,23 @@ fn error(status: StatusCode, code: &'static str) -> Response {
     params(ListQuery),
     responses(
         (status = 200, description = "One page of transactions", body = TransactionPage),
-        (status = 400, description = "Invalid status filter"),
-        (status = 401, description = "No valid session"),
-        (status = 500, description = "Internal error"),
+        (status = 401, description = "No valid session", body = ErrorResponse),
+        (status = 422, description = "Invalid status filter (per-field)", body = ErrorResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse),
     ),
     tag = "transactions",
 )]
 pub(crate) async fn list_transactions(
     State(payments): State<PaymentsService>,
     Query(q): Query<ListQuery>,
-) -> Response {
+) -> Result<Json<TransactionPage>, ApiError> {
     let status = match q.status.as_deref().map(PaymentStatus::parse).transpose() {
         Ok(status) => status,
-        Err(_) => return error(StatusCode::BAD_REQUEST, "invalid_status"),
+        Err(_) => {
+            let mut fields = BTreeMap::new();
+            fields.insert("status".to_string(), "unknown payment status".to_string());
+            return Err(ApiError::validation(fields));
+        }
     };
     let limit = q.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let offset = q.offset.unwrap_or(0);
@@ -208,19 +204,16 @@ pub(crate) async fn list_transactions(
         offset,
     };
 
-    match payments.list(&query).await {
-        Ok(page) => Json(TransactionPage {
-            items: page.items.into_iter().map(TransactionOut::from).collect(),
-            total: page.total,
-            limit,
-            offset,
-        })
-        .into_response(),
-        Err(e) => {
-            eprintln!("transactions: list failed: {e}");
-            error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
-        }
-    }
+    let page = payments
+        .list(&query)
+        .await
+        .map_err(|e| ApiError::internal(format!("transactions: list failed: {e}")))?;
+    Ok(Json(TransactionPage {
+        items: page.items.into_iter().map(TransactionOut::from).collect(),
+        total: page.total,
+        limit,
+        offset,
+    }))
 }
 
 /// Handle `GET /transactions/{id}`: one payment with its full status history.
@@ -230,32 +223,29 @@ pub(crate) async fn list_transactions(
     params(("id" = String, Path, description = "The payment id")),
     responses(
         (status = 200, description = "The payment and its status history", body = TransactionDetailOut),
-        (status = 401, description = "No valid session"),
-        (status = 404, description = "No such payment"),
-        (status = 500, description = "Internal error"),
+        (status = 401, description = "No valid session", body = ErrorResponse),
+        (status = 404, description = "No such payment", body = ErrorResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse),
     ),
     tag = "transactions",
 )]
 pub(crate) async fn get_transaction(
     State(payments): State<PaymentsService>,
     Path(id): Path<String>,
-) -> Response {
-    match payments.get(&PaymentId::new(id)).await {
-        Ok(Some(detail)) => Json(TransactionDetailOut {
-            transaction: TransactionOut::from(detail.payment),
-            history: detail
-                .history
-                .into_iter()
-                .map(StatusChangeOut::from)
-                .collect(),
-        })
-        .into_response(),
-        Ok(None) => error(StatusCode::NOT_FOUND, "not_found"),
-        Err(e) => {
-            eprintln!("transactions: get failed: {e}");
-            error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
-        }
-    }
+) -> Result<Json<TransactionDetailOut>, ApiError> {
+    let detail = payments
+        .get(&PaymentId::new(id))
+        .await
+        .map_err(|e| ApiError::internal(format!("transactions: get failed: {e}")))?
+        .ok_or_else(|| ApiError::not_found("No such transaction."))?;
+    Ok(Json(TransactionDetailOut {
+        transaction: TransactionOut::from(detail.payment),
+        history: detail
+            .history
+            .into_iter()
+            .map(StatusChangeOut::from)
+            .collect(),
+    }))
 }
 
 /// Handle `POST /transactions/{id}/refund`: refund a captured payment in full.
@@ -266,41 +256,45 @@ pub(crate) async fn get_transaction(
     params(("id" = String, Path, description = "The payment id")),
     responses(
         (status = 200, description = "Refunded; the payment's new status", body = RefundOut),
-        (status = 401, description = "No valid session"),
-        (status = 403, description = "Not the admin role, or missing/mismatched CSRF"),
-        (status = 404, description = "No such payment"),
-        (status = 409, description = "Payment is not in a refundable state"),
-        (status = 422, description = "The provider declined the refund"),
-        (status = 502, description = "The provider was unavailable"),
-        (status = 500, description = "Internal error"),
+        (status = 401, description = "No valid session", body = ErrorResponse),
+        (status = 403, description = "Not the admin role, or missing/mismatched CSRF", body = ErrorResponse),
+        (status = 404, description = "No such payment", body = ErrorResponse),
+        (status = 409, description = "Payment is not in a refundable state", body = ErrorResponse),
+        (status = 422, description = "The provider declined the refund", body = ErrorResponse),
+        (status = 502, description = "The provider was unavailable", body = ErrorResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse),
     ),
     tag = "transactions",
 )]
 pub(crate) async fn refund_transaction(
     State(payments): State<PaymentsService>,
     Path(id): Path<String>,
-) -> Response {
+) -> Result<Json<RefundOut>, ApiError> {
     match payments.refund(&PaymentId::new(id)).await {
-        Ok(outcome) => Json(RefundOut {
+        Ok(outcome) => Ok(Json(RefundOut {
             status: outcome.status.as_str().to_string(),
-        })
-        .into_response(),
-        Err(RefundError::NotFound) => error(StatusCode::NOT_FOUND, "not_found"),
+        })),
+        Err(RefundError::NotFound) => Err(ApiError::not_found("No such transaction.")),
         Err(
             RefundError::NotRefundable(_)
             | RefundError::NoProviderReference
             | RefundError::Conflict,
-        ) => error(StatusCode::CONFLICT, "not_refundable"),
-        Err(RefundError::Provider(ProviderError::Rejected(_))) => {
-            error(StatusCode::UNPROCESSABLE_ENTITY, "provider_rejected")
-        }
-        Err(RefundError::Provider(ProviderError::Unavailable(_))) => {
-            error(StatusCode::BAD_GATEWAY, "provider_unavailable")
-        }
-        Err(RefundError::Backend(msg)) => {
-            eprintln!("transactions: refund failed: {msg}");
-            error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
-        }
+        ) => Err(ApiError::conflict(
+            "not_refundable",
+            "This payment is not in a refundable state.",
+        )),
+        Err(RefundError::Provider(ProviderError::Rejected(_))) => Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "provider_rejected",
+            "The payment provider declined the refund.",
+        )),
+        Err(RefundError::Provider(ProviderError::Unavailable(_))) => Err(ApiError::bad_gateway(
+            "provider_unavailable",
+            "The payment provider is unavailable. Please try again.",
+        )),
+        Err(RefundError::Backend(msg)) => Err(ApiError::internal(format!(
+            "transactions: refund failed: {msg}"
+        ))),
     }
 }
 

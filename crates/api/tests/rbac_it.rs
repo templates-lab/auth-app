@@ -203,4 +203,44 @@ async fn admin_gated_endpoint_rejects_a_user_role_session() {
         .await
         .unwrap();
     assert_eq!(user_events.status(), StatusCode::FORBIDDEN);
+
+    // Every error, whatever the endpoint, carries the same shape: a machine
+    // code, a client-safe message, and a correlation trace id.
+    let body = axum::body::to_bytes(user_events.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let err: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(err["code"], "forbidden");
+    assert!(err["message"].as_str().is_some_and(|m| !m.is_empty()));
+    assert!(err["trace_id"].as_str().is_some_and(|t| !t.is_empty()));
+}
+
+#[tokio::test]
+async fn malformed_login_is_422_with_per_field_detail() {
+    let db = testkit::spawn_test_db().await;
+    seed_admin_and_user(db.pool.clone()).await;
+    let app = router(db.pool.clone()).await;
+
+    // A malformed email and an empty password: a request-shape problem, so a
+    // 422 with per-field messages — and it reveals nothing about any account.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/login")
+                .header("content-type", "application/json")
+                .body(login_body("not-an-email", ""))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let err: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(err["code"], "validation_failed");
+    assert!(err["fields"]["email"].as_str().is_some());
+    assert!(err["fields"]["password"].as_str().is_some());
+    assert!(err["trace_id"].as_str().is_some_and(|t| !t.is_empty()));
 }

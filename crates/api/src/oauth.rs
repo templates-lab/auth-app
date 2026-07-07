@@ -7,7 +7,6 @@
 
 use application::{AuditService, OAuthLoginService, SessionService};
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -17,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 use crate::auth::ClientIp;
+use crate::error::ApiError;
 use crate::session::attach_session_cookies;
 
 /// Where the callback sends the browser after it finishes.
@@ -97,14 +97,12 @@ pub(crate) async fn providers_handler(State(state): State<OAuthState>) -> Respon
 /// started (a storage failure).
 async fn start_handler(Path(provider): Path<String>, State(state): State<OAuthState>) -> Response {
     if !state.oauth.has_provider(&provider) {
-        return (StatusCode::NOT_FOUND, "unknown provider").into_response();
+        return ApiError::not_found("Unknown sign-in provider.").into_response();
     }
     match state.oauth.begin(&provider).await {
         Ok(outcome) => Redirect::to(&outcome.authorize_url).into_response(),
-        Err(e) => {
-            eprintln!("oauth: failed to begin flow for {provider}: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "failed to start sign-in").into_response()
-        }
+        Err(e) => ApiError::internal(format!("oauth: failed to begin flow for {provider}: {e}"))
+            .into_response(),
     }
 }
 

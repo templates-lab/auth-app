@@ -8,13 +8,12 @@ use std::time::SystemTime;
 
 use application::{AuditService, SessionService};
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use domain::{AuditEvent, Role};
 use serde::{Deserialize, Serialize};
 
+use crate::error::{ApiError, ErrorResponse};
 use crate::rbac::require_role;
 use crate::session::require_session;
 
@@ -93,11 +92,6 @@ impl From<AuditEvent> for EventOut {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: &'static str,
-}
-
 /// Handle `GET /audit/events?limit=`: the most recent audit events, newest
 /// first, capped at [`MAX_LIMIT`] regardless of what the caller asks for.
 #[utoipa::path(
@@ -106,30 +100,20 @@ struct ErrorBody {
     params(ListQuery),
     responses(
         (status = 200, description = "Recent audit events, newest first", body = [EventOut]),
-        (status = 401, description = "No valid session"),
-        (status = 403, description = "Authenticated but not the admin role"),
-        (status = 500, description = "Internal error"),
+        (status = 401, description = "No valid session", body = ErrorResponse),
+        (status = 403, description = "Authenticated but not the admin role", body = ErrorResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse),
     ),
     tag = "audit",
 )]
 pub(crate) async fn list_events(
     State(audit): State<AuditService>,
     Query(q): Query<ListQuery>,
-) -> Response {
+) -> Result<Json<Vec<EventOut>>, ApiError> {
     let limit = q.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
-    match audit.recent(limit).await {
-        Ok(events) => {
-            Json(events.into_iter().map(EventOut::from).collect::<Vec<_>>()).into_response()
-        }
-        Err(e) => {
-            eprintln!("audit: failed to list events: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorBody {
-                    error: "internal_error",
-                }),
-            )
-                .into_response()
-        }
-    }
+    let events = audit
+        .recent(limit)
+        .await
+        .map_err(|e| ApiError::internal(format!("audit: failed to list events: {e}")))?;
+    Ok(Json(events.into_iter().map(EventOut::from).collect()))
 }

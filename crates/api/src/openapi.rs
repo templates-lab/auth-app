@@ -33,6 +33,7 @@ use utoipa::OpenApi;
         crate::transactions::refund_transaction,
     ),
     components(schemas(
+        crate::error::ErrorResponse,
         crate::auth::LoginBody,
         crate::auth::LoginOk,
         crate::session::MeOut,

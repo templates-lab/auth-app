@@ -48,13 +48,34 @@
             }
           },
           "401": {
-            "description": "No valid session"
+            "description": "No valid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Authenticated but not the admin role"
+            "description": "Authenticated but not the admin role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "Internal error"
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -89,13 +110,44 @@
             }
           },
           "401": {
-            "description": "Invalid credentials (wrong password or unknown account)"
+            "description": "Invalid credentials (wrong password or unknown account)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed request (per-field validation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Rate-limited or locked out; carries Retry-After"
+            "description": "Rate-limited or locked out; carries Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "Internal error"
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -254,14 +306,35 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid status filter"
-          },
           "401": {
-            "description": "No valid session"
+            "description": "No valid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid status filter (per-field)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "Internal error"
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -296,13 +369,34 @@
             }
           },
           "401": {
-            "description": "No valid session"
+            "description": "No valid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such payment"
+            "description": "No such payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "Internal error"
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -337,25 +431,74 @@
             }
           },
           "401": {
-            "description": "No valid session"
+            "description": "No valid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Not the admin role, or missing/mismatched CSRF"
+            "description": "Not the admin role, or missing/mismatched CSRF",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "404": {
-            "description": "No such payment"
+            "description": "No such payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Payment is not in a refundable state"
+            "description": "Payment is not in a refundable state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "422": {
-            "description": "The provider declined the refund"
+            "description": "The provider declined the refund",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
-            "description": "Internal error"
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "502": {
-            "description": "The provider was unavailable"
+            "description": "The provider was unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -363,6 +506,42 @@
   },
   "components": {
     "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "description": "The JSON body every error response carries.",
+        "required": [
+          "code",
+          "message",
+          "trace_id"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "A stable, machine-readable error code (e.g. `unauthorized`,\n`not_found`, `validation_failed`)."
+          },
+          "fields": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Per-field validation messages, present only on a `422` response.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable, client-safe message. Never contains internal detail."
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "A correlation id, also logged server-side, so a client-reported error\ncan be matched to its log line."
+          }
+        }
+      },
       "EventOut": {
         "type": "object",
         "description": "One audit event, as returned to the admin panel.",

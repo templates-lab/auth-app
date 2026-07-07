@@ -14,13 +14,11 @@
 //! one-line `require_role(Role::parse("editor")?)`, not a structural change.
 
 use axum::extract::{Request, State};
-use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use domain::Role;
-use serde::Serialize;
 
+use crate::error::ApiError;
 use crate::session::CurrentSession;
 
 /// Require that the authenticated session's role equals `required`, exactly.
@@ -35,17 +33,9 @@ pub async fn require_role(State(required): State<Role>, request: Request, next: 
         .is_some_and(|current| current.role == required);
 
     if !matches {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(ErrorBody { error: "forbidden" }),
-        )
+        return ApiError::forbidden("forbidden", "You do not have permission to do that.")
             .into_response();
     }
 
     next.run(request).await
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: &'static str,
 }

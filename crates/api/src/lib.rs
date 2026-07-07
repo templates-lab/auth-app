@@ -14,6 +14,7 @@ use domain::Readiness;
 pub mod audit;
 pub mod auth;
 pub mod cors;
+pub mod error;
 pub mod oauth;
 pub mod openapi;
 pub mod payments_webhook;
