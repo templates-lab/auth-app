@@ -121,6 +121,20 @@ committed, but excluded from Prettier/ESLint and never hand-edited.
 
 ## Getting started
 
+Running the whole stack (Traefik + API + web + Postgres) with Docker is the
+fastest path — copy the environment and bring it up:
+
+```bash
+cp .env.example .env
+docker compose --profile dev up --build
+```
+
+Every configurable variable is documented in [`.env.example`](.env.example), and
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) is the reproducible guide from a clone
+to a running stack (local dev and production with versioned images + secrets).
+
+To work on the frontend or backend directly, outside containers:
+
 Frontend (pnpm workspace):
 
 ```bash
