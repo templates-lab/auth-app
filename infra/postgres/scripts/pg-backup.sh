@@ -4,9 +4,10 @@
 # $BACKUP_RETENTION archives. Connection settings come from the standard libpq
 # environment variables (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
 #
-# Run it on a schedule via the backup sidecar (backup-scheduler.sh), or manually:
+# Run it on a schedule via the backup sidecar (backup-scheduler.sh), or manually
+# with --entrypoint (the sidecar's own entrypoint is the scheduler loop):
 #   docker compose -f infra/postgres/docker-compose.yml --profile backup \
-#     run --rm postgres-backup /scripts/pg-backup.sh
+#     run --rm --entrypoint /scripts/pg-backup.sh postgres-backup
 set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/backups}"

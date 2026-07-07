@@ -95,7 +95,7 @@ Take a backup on demand:
 
 ```bash
 docker compose -f infra/postgres/docker-compose.yml --profile backup \
-  run --rm postgres-backup /scripts/pg-backup.sh
+  run --rm --entrypoint /scripts/pg-backup.sh postgres-backup
 ```
 
 Restore from an archive (drops and recreates existing objects, in one
@@ -103,7 +103,7 @@ transaction):
 
 ```bash
 docker compose -f infra/postgres/docker-compose.yml --profile backup \
-  run --rm postgres-backup /scripts/pg-restore.sh /backups/authapp-<timestamp>.dump
+  run --rm --entrypoint /scripts/pg-restore.sh postgres-backup /backups/authapp-<timestamp>.dump
 ```
 
 ## Running
@@ -150,16 +150,16 @@ docker compose -f infra/postgres/docker-compose.yml exec postgres \
   "CREATE TABLE probe(id int primary key); INSERT INTO probe VALUES (1);"
 
 docker compose -f infra/postgres/docker-compose.yml --profile backup \
-  run --rm postgres-backup /scripts/pg-backup.sh
+  run --rm --entrypoint /scripts/pg-backup.sh postgres-backup
 #   -> "backup: wrote ... /backups/authapp-<ts>.dump"
 
 docker compose -f infra/postgres/docker-compose.yml exec postgres \
   psql -U authapp_app -d authapp -c "DROP TABLE probe;"
 
 archive=$(docker compose -f infra/postgres/docker-compose.yml --profile backup \
-  run --rm postgres-backup sh -c 'ls -1t /backups/*.dump | head -1')
+  run --rm --entrypoint sh postgres-backup -c 'ls -1t /backups/*.dump | head -1')
 docker compose -f infra/postgres/docker-compose.yml --profile backup \
-  run --rm postgres-backup /scripts/pg-restore.sh "$archive"
+  run --rm --entrypoint /scripts/pg-restore.sh postgres-backup "$archive"
 
 docker compose -f infra/postgres/docker-compose.yml exec postgres \
   psql -U authapp_app -d authapp -c "SELECT count(*) FROM probe;"

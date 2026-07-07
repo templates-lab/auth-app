@@ -4,9 +4,9 @@
 # the restore is a clean replace, not a merge. Connection settings come from the
 # standard libpq environment variables (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
 #
-# Usage:
+# Usage (with --entrypoint, since the sidecar's own entrypoint is the scheduler):
 #   docker compose -f infra/postgres/docker-compose.yml --profile backup \
-#     run --rm postgres-backup /scripts/pg-restore.sh /backups/authapp-<ts>.dump
+#     run --rm --entrypoint /scripts/pg-restore.sh postgres-backup /backups/authapp-<ts>.dump
 set -euo pipefail
 
 : "${PGDATABASE:?PGDATABASE must be set}"
