@@ -9,10 +9,12 @@ use std::sync::Arc;
 use domain::{Health, HealthCheck};
 
 pub mod auth;
+pub mod session;
 
 pub use auth::{
     BootstrapError, BootstrapOutcome, BootstrapService, LoginError, LoginRequest, LoginService,
 };
+pub use session::{AuthenticatedSession, IssuedSession, SessionError, SessionService};
 
 /// Application service exposing the health use case.
 ///

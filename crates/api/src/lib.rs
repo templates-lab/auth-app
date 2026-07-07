@@ -4,11 +4,12 @@
 //! translates HTTP requests into application calls and back; it holds no
 //! business logic and no storage concerns.
 
-use application::{HealthService, LoginService};
+use application::{HealthService, LoginService, SessionService};
 use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
 
 pub mod auth;
+pub mod session;
 
 /// Build the HTTP router, injecting the application services as state.
 ///
@@ -16,10 +17,11 @@ pub mod auth;
 /// onto a stateless base — so adding a delivery surface (here, admin login)
 /// never entangles it with another's state. New features add a `.merge(...)`
 /// line as they land.
-pub fn router(health: HealthService, login: LoginService) -> Router {
+pub fn router(health: HealthService, login: LoginService, sessions: SessionService) -> Router {
     Router::new()
         .merge(health_routes(health))
-        .merge(auth::routes(login))
+        .merge(auth::routes(login, sessions.clone()))
+        .merge(session::routes(sessions))
 }
 
 /// The readiness-probe sub-router.

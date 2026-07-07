@@ -24,15 +24,16 @@ use sqlx::Row;
 /// Convert a `SystemTime` to whole Unix epoch seconds, if representable.
 ///
 /// Times before the epoch (not expected for lockout deadlines) collapse to
-/// `None`, i.e. "not locked".
-fn to_epoch(time: SystemTime) -> Option<i64> {
+/// `None`, i.e. "not locked". Shared with [`crate::session_repo`], which
+/// stores its timestamps the same way.
+pub(crate) fn to_epoch(time: SystemTime) -> Option<i64> {
     time.duration_since(SystemTime::UNIX_EPOCH)
         .ok()
         .map(|d| d.as_secs() as i64)
 }
 
 /// Reconstruct a `SystemTime` from Unix epoch seconds.
-fn from_epoch(secs: i64) -> SystemTime {
+pub(crate) fn from_epoch(secs: i64) -> SystemTime {
     SystemTime::UNIX_EPOCH + Duration::from_secs(secs.max(0) as u64)
 }
 

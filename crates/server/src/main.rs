@@ -19,10 +19,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use application::{BootstrapOutcome, BootstrapService, HealthService, LoginService};
+use application::{
+    BootstrapOutcome, BootstrapService, HealthService, LoginService, SessionService,
+};
 use contracts::{InMemoryExecutor, ModuleRegistry};
 use infrastructure::{
-    Argon2Hasher, PgAdminRepository, PgConfig, PgHealthCheck, PgIpLockoutStore, SystemClock,
+    Argon2Hasher, PgAdminRepository, PgConfig, PgHealthCheck, PgIpLockoutStore,
+    PgSessionRepository, SecureRandomTokens, SystemClock,
 };
 
 mod config;
@@ -90,7 +93,13 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(SystemClock),
         auth.lockout_policy,
     );
-    let app = modules.router(api::router(health, login));
+    let sessions = SessionService::new(
+        Arc::new(PgSessionRepository::new(pool.clone())),
+        Arc::new(SecureRandomTokens),
+        Arc::new(SystemClock),
+        auth.session_policy,
+    );
+    let app = modules.router(api::router(health, login, sessions));
 
     // 6. Serve. `into_make_service_with_connect_info` records each connection's
     // peer address so the login handler can fall back to it for per-IP lockout

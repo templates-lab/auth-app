@@ -35,6 +35,15 @@ module-demo = { path = "crates/module-demo" }
 # `async-trait` is its one exception — an ergonomics macro (not a runtime) that
 # lets a port be `async` while staying object-safe behind `dyn`.
 axum = "0.8"
+# Typed cookie extraction/building (HttpOnly/Secure/SameSite/Max-Age) for the
+# session and CSRF cookies — the vetted axum-ecosystem crate for this rather
+# than hand-rolling `Cookie` header parsing.
+axum-extra = { version = "0.10", default-features = false, features = [
+    "cookie",
+] }
+# `Cookie::max_age`/`expires` types, pulled in transitively by `cookie` anyway —
+# named explicitly so the api crate can compute a cookie's expiry.
+time = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 async-trait = "0.1"
 # Password hashing. Argon2id is the OWASP-recommended algorithm for password

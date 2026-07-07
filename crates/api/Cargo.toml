@@ -19,5 +19,9 @@ workspace = true
 application.workspace = true
 domain.workspace = true
 axum.workspace = true
+# Typed cookie building/parsing (HttpOnly/Secure/SameSite/Max-Age) for the
+# session and CSRF cookies.
+axum-extra.workspace = true
+time.workspace = true
 # JSON request/response bodies at the HTTP boundary.
 serde.workspace = true

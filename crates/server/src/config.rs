@@ -4,7 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 
-use domain::{LockoutPolicy, PasswordPolicy};
+use domain::{LockoutPolicy, PasswordPolicy, SessionPolicy};
 use infrastructure::Argon2Params;
 
 /// Runtime configuration for the HTTP server.
@@ -67,6 +67,8 @@ pub(crate) struct AuthConfig {
     pub(crate) password_policy: PasswordPolicy,
     /// The progressive lockout policy applied on failed logins.
     pub(crate) lockout_policy: LockoutPolicy,
+    /// The session idle/absolute expiration policy.
+    pub(crate) session_policy: SessionPolicy,
 }
 
 impl AuthConfig {
@@ -81,6 +83,10 @@ impl AuthConfig {
     /// - `ADMIN_LOCKOUT_MAX_ATTEMPTS` (default `5`)
     /// - `ADMIN_LOCKOUT_BASE_SECONDS` (default `60`)
     /// - `ADMIN_LOCKOUT_MAX_SECONDS` (default `3600`)
+    ///
+    /// Session policy:
+    /// - `SESSION_IDLE_TIMEOUT_SECS` (default `1800`, 30 minutes)
+    /// - `SESSION_ABSOLUTE_TIMEOUT_SECS` (default `43200`, 12 hours)
     ///
     /// Argon2 parameters follow [`Argon2Params::from_env`] (OWASP defaults). A
     /// present-but-unparseable value is an error, never a silent fallback.
@@ -119,10 +125,23 @@ impl AuthConfig {
         let argon2 = Argon2Params::from_env()
             .map_err(|e| AuthConfigError::InvalidValue("ARGON2_*".to_string(), e.to_string()))?;
 
+        let recommended_session = SessionPolicy::recommended();
+        let session_policy = SessionPolicy {
+            idle_timeout: Duration::from_secs(parse_var(
+                "SESSION_IDLE_TIMEOUT_SECS",
+                recommended_session.idle_timeout.as_secs(),
+            )?),
+            absolute_timeout: Duration::from_secs(parse_var(
+                "SESSION_ABSOLUTE_TIMEOUT_SECS",
+                recommended_session.absolute_timeout.as_secs(),
+            )?),
+        };
+
         Ok(Self {
             argon2,
             password_policy,
             lockout_policy,
+            session_policy,
         })
     }
 }

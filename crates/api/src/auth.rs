@@ -9,20 +9,31 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
-use application::{LoginError, LoginRequest, LoginService};
+use application::{LoginError, LoginRequest, LoginService, SessionService};
 use axum::extract::{ConnectInfo, FromRequestParts, State};
 use axum::http::request::Parts;
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
+use axum_extra::extract::cookie::CookieJar;
 use serde::{Deserialize, Serialize};
 
-/// Mount the auth routes with the login service as their state.
-pub fn routes(login: LoginService) -> Router {
+use crate::session::attach_session_cookies;
+
+/// State for the login route: the credential check and the session issuer a
+/// successful login hands off to.
+#[derive(Clone)]
+struct LoginState {
+    login: LoginService,
+    sessions: SessionService,
+}
+
+/// Mount the auth routes with the login and session services as their state.
+pub fn routes(login: LoginService, sessions: SessionService) -> Router {
     Router::new()
         .route("/auth/login", post(login_handler))
-        .with_state(login)
+        .with_state(LoginState { login, sessions })
 }
 
 /// The JSON body of a login request.
@@ -94,12 +105,16 @@ fn forwarded_ip(parts: &Parts) -> Option<String> {
 
 /// Handle `POST /auth/login`.
 ///
-/// `200` with the admin id on success; `401` for invalid credentials (identical
-/// for a wrong password and a nonexistent account); `429` with `Retry-After`
-/// when the account or IP is locked out; `500` on an internal failure.
+/// `200` with the admin id and fresh session/CSRF cookies on success; `401`
+/// for invalid credentials (identical for a wrong password and a nonexistent
+/// account); `429` with `Retry-After` when the account or IP is locked out;
+/// `500` on an internal failure. Every successful login issues a brand-new
+/// session — there is no "reuse the prior session" path — which is what
+/// satisfies session rotation on login.
 async fn login_handler(
-    State(login): State<LoginService>,
+    State(state): State<LoginState>,
     ClientIp(client_ip): ClientIp,
+    jar: CookieJar,
     Json(body): Json<LoginBody>,
 ) -> Response {
     let request = LoginRequest {
@@ -108,14 +123,30 @@ async fn login_handler(
         client_ip,
     };
 
-    match login.login(request).await {
-        Ok(id) => (
-            StatusCode::OK,
-            Json(LoginOk {
-                admin_id: id.as_str().to_string(),
-            }),
-        )
-            .into_response(),
+    match state.login.login(request).await {
+        Ok(id) => match state.sessions.start(id.clone()).await {
+            Ok(issued) => {
+                let jar = attach_session_cookies(jar, &issued);
+                (
+                    StatusCode::OK,
+                    jar,
+                    Json(LoginOk {
+                        admin_id: id.as_str().to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+            Err(e) => {
+                eprintln!("login: failed to issue session: {e}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorBody {
+                        error: "internal_error",
+                    }),
+                )
+                    .into_response()
+            }
+        },
         Err(LoginError::InvalidCredentials) => (
             StatusCode::UNAUTHORIZED,
             Json(ErrorBody {

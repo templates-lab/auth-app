@@ -115,9 +115,37 @@ lockout** applied independently per account and per client IP.
 curl -X POST http://localhost:8080/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"admin@example.com","password":"..."}'
-# 200 {"admin_id":"..."} on success
+# 200 {"admin_id":"..."} on success, plus Set-Cookie: session=... and csrf=...
 # 401 {"error":"invalid_credentials"} for a wrong password OR unknown account
 # 429 {"error":"too_many_attempts"} (+ Retry-After) when locked out
+```
+
+### Sessions and CSRF
+
+A successful login issues a brand-new, server-side session persisted in
+Postgres — never a reused or client-signed token — which is what makes login
+itself a session rotation. Two cookies are set, both `Secure` and
+`SameSite=Strict`:
+
+- `session` — `HttpOnly`, the bearer token every subsequent request
+  authenticates with. Never readable by client-side script.
+- `csrf` — readable by client-side script on purpose: mirror its value into an
+  `X-CSRF-Token` header on every mutating request (`POST`/`PUT`/`PATCH`/`DELETE`).
+  A mismatched or missing header is rejected with `403` before the handler
+  runs; `GET`/`HEAD`/`OPTIONS` are exempt.
+
+A session dies at whichever comes first: `SESSION_IDLE_TIMEOUT_SECS` of
+inactivity, or `SESSION_ABSOLUTE_TIMEOUT_SECS` since it was issued.
+`POST /auth/logout` (itself CSRF-protected) revokes the session server-side and
+clears both cookies:
+
+```sh
+curl -X POST http://localhost:8080/auth/logout \
+  --cookie "session=$SESSION; csrf=$CSRF" \
+  -H "x-csrf-token: $CSRF"
+# 204 on success (idempotent — an already-expired session still clears cookies)
+# 401 {"error":"unauthorized"} for a missing/invalid/expired session
+# 403 {"error":"csrf_mismatch"} for a missing/mismatched CSRF header
 ```
 
 ### Bootstrapping the first admin
@@ -150,3 +178,5 @@ present-but-unparseable value fails fast at startup.
 | `ARGON2_MEMORY_KIB`                | `19456` | argon2id memory cost (KiB)         |
 | `ARGON2_ITERATIONS`                | `2`     | argon2id iterations                |
 | `ARGON2_PARALLELISM`               | `1`     | argon2id parallelism               |
+| `SESSION_IDLE_TIMEOUT_SECS`        | `1800`  | Session dies after this much inactivity |
+| `SESSION_ABSOLUTE_TIMEOUT_SECS`    | `43200` | Session dies this long after login, regardless of activity |

@@ -9,6 +9,7 @@
 
 pub mod auth;
 pub mod health;
+pub mod session;
 
 pub use auth::{
     AdminAccount, AdminId, AdminRepository, Clock, Email, EmailError, IpLockoutStore,
@@ -16,3 +17,6 @@ pub use auth::{
     PasswordPolicy, PasswordPolicyError, PasswordRequirement, RepositoryError,
 };
 pub use health::{Health, HealthCheck, Readiness};
+pub use session::{
+    CsrfToken, Session, SessionPolicy, SessionRepository, SessionToken, SessionTokenGenerator,
+};
