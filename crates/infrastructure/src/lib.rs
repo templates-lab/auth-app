@@ -20,6 +20,8 @@ pub mod password;
 pub mod payments_fake;
 pub mod payments_repo;
 pub mod payments_stripe;
+pub mod payments_stripe_webhook;
+pub mod payments_webhook_store;
 pub mod session_repo;
 pub mod tokens;
 
@@ -36,6 +38,8 @@ pub use password::{Argon2Hasher, Argon2Params};
 pub use payments_fake::FakePaymentProvider;
 pub use payments_repo::PgPaymentRepository;
 pub use payments_stripe::{StripeConfig, StripeProvider};
+pub use payments_stripe_webhook::{StripeWebhookConfig, StripeWebhookVerifier};
+pub use payments_webhook_store::PgWebhookEventStore;
 pub use session_repo::PgSessionRepository;
 pub use tokens::SecureRandomTokens;
 

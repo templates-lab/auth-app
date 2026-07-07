@@ -215,6 +215,13 @@ pub trait PaymentRepository: Send + Sync {
     /// Look a payment up by id, if it exists.
     async fn find(&self, id: &PaymentId) -> Result<Option<Payment>, PaymentRepositoryError>;
 
+    /// Look a payment up by the provider's reference, if it exists. Used by the
+    /// webhook handler to map a provider event back to the local payment.
+    async fn find_by_provider_reference(
+        &self,
+        reference: &ProviderReference,
+    ) -> Result<Option<Payment>, PaymentRepositoryError>;
+
     /// Attach the provider's reference once the provider has created its
     /// intent for this payment.
     async fn set_provider_reference(

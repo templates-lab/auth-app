@@ -11,11 +11,13 @@ publish = false
 [lints]
 workspace = true
 
-# The application layer orchestrates use cases. It depends ONLY on `domain`
-# (inward) — never on `infrastructure` or `api`. It knows nothing about HTTP or
-# storage; it wires domain ports into application services.
+# The application layer orchestrates use cases. It depends on the domain crates
+# (`domain` for auth/sessions, `payments` for the payments bounded context) —
+# never on `infrastructure` or `api`. It knows nothing about HTTP or storage;
+# it wires domain ports into application services.
 [dependencies]
 domain.workspace = true
+payments.workspace = true
 
 # Test-only: a stub port needs `async-trait` to implement the async `HealthCheck`
 # contract, and `tokio` provides the runtime for `#[tokio::test]`.

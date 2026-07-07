@@ -11,6 +11,7 @@ use domain::{Health, HealthCheck};
 pub mod audit;
 pub mod auth;
 pub mod oauth;
+pub mod payments_webhook;
 pub mod session;
 
 pub use audit::AuditService;
@@ -18,6 +19,7 @@ pub use auth::{
     BootstrapError, BootstrapOutcome, BootstrapService, LoginError, LoginRequest, LoginService,
 };
 pub use oauth::{BeginOutcome, OAuthAuthenticatedAdmin, OAuthLoginService};
+pub use payments_webhook::{WebhookOutcome, WebhookService};
 pub use session::{AuthenticatedSession, IssuedSession, SessionError, SessionService};
 
 /// Application service exposing the health use case.

@@ -36,9 +36,12 @@ dependencies = [
  "axum-extra",
  "base64",
  "domain",
+ "hmac",
  "infrastructure",
+ "payments",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "testkit",
  "time",
@@ -53,6 +56,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "domain",
+ "payments",
  "tokio",
 ]
 
@@ -1150,6 +1154,7 @@ dependencies = [
  "async-trait",
  "base64",
  "domain",
+ "hmac",
  "payments",
  "reqwest",
  "serde",

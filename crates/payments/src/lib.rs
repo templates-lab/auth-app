@@ -13,6 +13,7 @@
 mod money;
 mod payment;
 mod provider;
+mod webhook;
 
 pub use money::{Currency, CurrencyError, Money, MoneyError};
 pub use payment::{
@@ -20,3 +21,6 @@ pub use payment::{
     PaymentStatusChange, PaymentStatusError, ProviderReference,
 };
 pub use provider::{PaymentProvider, ProviderError, ProviderIntent};
+pub use webhook::{
+    WebhookError, WebhookEvent, WebhookEventStore, WebhookStoreError, WebhookVerifier,
+};

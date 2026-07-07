@@ -21,14 +21,15 @@ use std::sync::Arc;
 
 use application::{
     AuditService, BootstrapOutcome, BootstrapService, HealthService, LoginService,
-    OAuthLoginService, SessionService,
+    OAuthLoginService, SessionService, WebhookService,
 };
 use contracts::{InMemoryExecutor, ModuleRegistry};
 use infrastructure::{
     Argon2Hasher, FakePaymentProvider, OAuthSecrets, OidcProvider, PgAdminRepository,
     PgAuditRepository, PgConfig, PgHealthCheck, PgIpLockoutStore, PgOAuthIdentityRepository,
-    PgPendingAuthStore, PgSessionRepository, ReqwestHttpClient, SecureRandomTokens, StripeProvider,
-    SystemClock,
+    PgPaymentRepository, PgPendingAuthStore, PgSessionRepository, PgWebhookEventStore,
+    ReqwestHttpClient, SecureRandomTokens, StripeProvider, StripeWebhookConfig,
+    StripeWebhookVerifier, SystemClock,
 };
 
 mod config;
@@ -130,18 +131,35 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
 
     // Select the active payment provider by env (fake for local dev, stripe in
     // production) — no domain/application logic recompiles when it changes. The
-    // payment HTTP surface (webhooks, admin transactions API) that consumes it
-    // lands in follow-up beads; building it here proves the env selection and
-    // validates its configuration at startup.
+    // payment webhook endpoint is enabled for Stripe once its signing secret is
+    // set; the provider handle itself feeds the admin transactions API in a
+    // follow-up bead. Building both here proves the env selection and validates
+    // the configuration at startup.
     let payment_config = PaymentProviderConfig::from_env()?;
     println!("payments: provider = {}", payment_config.label());
-    let _payment_provider: Option<Arc<dyn payments::PaymentProvider>> = match payment_config {
-        PaymentProviderConfig::Disabled => None,
-        PaymentProviderConfig::Fake => Some(Arc::new(FakePaymentProvider::new())),
-        PaymentProviderConfig::Stripe(cfg) => Some(Arc::new(StripeProvider::new(
-            cfg,
-            Arc::new(ReqwestHttpClient::new()),
-        ))),
+    #[allow(clippy::type_complexity)]
+    let (_payment_provider, webhooks): (
+        Option<Arc<dyn payments::PaymentProvider>>,
+        Option<WebhookService>,
+    ) = match payment_config {
+        PaymentProviderConfig::Disabled => (None, None),
+        PaymentProviderConfig::Fake => (Some(Arc::new(FakePaymentProvider::new())), None),
+        PaymentProviderConfig::Stripe(cfg) => {
+            let provider: Arc<dyn payments::PaymentProvider> =
+                Arc::new(StripeProvider::new(cfg, Arc::new(ReqwestHttpClient::new())));
+            let webhooks = std::env::var("STRIPE_WEBHOOK_SECRET")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .map(|secret| {
+                    println!("payments: stripe webhooks enabled");
+                    WebhookService::new(
+                        Arc::new(StripeWebhookVerifier::new(StripeWebhookConfig::new(secret))),
+                        Arc::new(PgWebhookEventStore::new(pool.clone())),
+                        Arc::new(PgPaymentRepository::new(pool.clone())),
+                    )
+                });
+            (Some(provider), webhooks)
+        }
     };
 
     let app = modules.router(api::router(
@@ -150,6 +168,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         sessions,
         audit,
         oauth,
+        webhooks,
         config.cors_allowed_origins(),
         auth.login_rate_limit,
     ));

@@ -255,9 +255,40 @@ application logic:
 | `STRIPE_SECRET_KEY` | Required for `stripe` (`sk_test_...` or `sk_live_...`)     |
 | `STRIPE_API_BASE`   | Optional; defaults to `https://api.stripe.com`             |
 
-Still to come as their own beads: signature-verified idempotent webhooks and
-a transactions view in the admin panel. The payment HTTP surface that wires
-the selected provider into routes lands with those.
+### Webhooks
+
+`POST /payments/webhooks` receives the provider's asynchronous status
+notifications. It is mounted for the `stripe` provider once its signing secret
+is set (`STRIPE_WEBHOOK_SECRET`); it needs no session or CSRF — the caller is
+the provider, authenticated by the webhook signature:
+
+```sh
+POST /payments/webhooks   # Stripe-Signature: t=...,v1=...   (body = raw event)
+# 200 — accepted, a no-op we recognize, or a deduplicated redelivery
+# 400 — bad/missing signature or malformed payload (recorded for audit)
+# 500 — internal failure, so the provider retries
+```
+
+Each acceptance criterion is enforced end-to-end (verified against a real
+Postgres):
+
+- **Signature verified over the raw bytes** (`payments_stripe_webhook.rs`):
+  HMAC-SHA256 over `"{timestamp}.{body}"`, constant-time, with a 5-minute
+  timestamp tolerance for replay protection. An invalid or missing signature
+  is `400` and its receipt is persisted for audit.
+- **Idempotency by event id** — the store's `record_and_claim` is an
+  `INSERT ... ON CONFLICT (event_id) DO NOTHING RETURNING`, so a redelivered
+  event id is a no-op: the status change is applied exactly once. The stored
+  state machine's transition guard is a second line of defence.
+- **Raw events persisted** — every receipt (accepted or rejected) is written
+  to `payments.webhook_events` verbatim, for diagnostics and replay.
+
+| Variable                | Meaning                                                |
+| ----------------------- | ------------------------------------------------------ |
+| `STRIPE_WEBHOOK_SECRET` | Endpoint signing secret (`whsec_...`); enables the route |
+
+Still to come as its own bead: a transactions view in the admin panel (a
+frontend task; the payment repository and history that back it already exist).
 
 ## Security headers and CORS
 

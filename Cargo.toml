@@ -66,6 +66,8 @@ serde_json = "1"
 # URL-safe base64 for PKCE and for decoding the id_token JWT payload.
 sha2 = "0.10"
 base64 = "0.22"
+# HMAC-SHA256 for verifying payment-webhook signatures (Stripe's scheme).
+hmac = "0.12"
 # HTTP client for the OAuth token/userinfo calls. rustls (no OpenSSL), JSON
 # helpers on; the default reqwest features we do not need are dropped.
 reqwest = { version = "0.12", default-features = false, features = [

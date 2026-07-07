@@ -4,7 +4,9 @@
 //! translates HTTP requests into application calls and back; it holds no
 //! business logic and no storage concerns.
 
-use application::{AuditService, HealthService, LoginService, OAuthLoginService, SessionService};
+use application::{
+    AuditService, HealthService, LoginService, OAuthLoginService, SessionService, WebhookService,
+};
 use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
 
@@ -12,6 +14,7 @@ pub mod audit;
 pub mod auth;
 pub mod cors;
 pub mod oauth;
+pub mod payments_webhook;
 pub mod rate_limit;
 pub mod rbac;
 pub mod session;
@@ -27,14 +30,18 @@ use rate_limit::RateLimitConfig;
 /// line as they land. The CORS layer wraps the whole router last, so it
 /// applies (and answers preflight `OPTIONS`) uniformly across every route.
 ///
-/// `oauth` is optional: `None` (or an [`OAuthLoginService`] with no configured
-/// providers) simply leaves the OAuth endpoints returning `404`.
+/// `oauth` and `webhooks` are optional: `None` simply leaves those endpoints
+/// unmounted (OAuth returns `404`; the webhook route is absent).
+// The composition root legitimately injects one argument per delivery surface;
+// bundling them into a struct would only move the same wiring elsewhere.
+#[allow(clippy::too_many_arguments)]
 pub fn router(
     health: HealthService,
     login: LoginService,
     sessions: SessionService,
     audit: AuditService,
     oauth: Option<(OAuthLoginService, OAuthRedirects)>,
+    webhooks: Option<WebhookService>,
     cors_allowed_origins: &[String],
     login_rate_limit: RateLimitConfig,
 ) -> Router {
@@ -50,6 +57,9 @@ pub fn router(
         .merge(audit::routes(audit.clone(), sessions.clone()));
     if let Some((oauth, redirects)) = oauth {
         router = router.merge(oauth::routes(oauth, sessions, audit, redirects));
+    }
+    if let Some(webhooks) = webhooks {
+        router = router.merge(payments_webhook::routes(webhooks));
     }
     router.layer(cors::layer(cors_allowed_origins))
 }

@@ -102,6 +102,28 @@ impl PaymentRepository for PgPaymentRepository {
         Ok(Some(row_to_payment(row)?))
     }
 
+    async fn find_by_provider_reference(
+        &self,
+        reference: &ProviderReference,
+    ) -> Result<Option<Payment>, PaymentRepositoryError> {
+        let row = sqlx::query(
+            "SELECT id::text AS id, provider_reference, amount_minor_units, currency, status, \
+             EXTRACT(EPOCH FROM created_at)::bigint AS created_at_epoch, \
+             EXTRACT(EPOCH FROM updated_at)::bigint AS updated_at_epoch \
+             FROM payments.payments WHERE provider_reference = $1",
+        )
+        .bind(reference.as_str())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(backend)?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        Ok(Some(row_to_payment(row)?))
+    }
+
     async fn set_provider_reference(
         &self,
         id: &PaymentId,
