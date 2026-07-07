@@ -53,6 +53,26 @@ jobs:
               - '.npmrc'
               - '.github/workflows/ci.yml'
 
+  # Secret scan: gitleaks over the full history on every push and PR, ungated by
+  # `changes` — a secret can be introduced in any file, so this must always run.
+  # A finding fails the job and (via the `ci` gate) blocks the merge. Fake
+  # credentials in tests and .env.example are allowlisted in .gitleaks.toml.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks scans every commit, not just the tip.
+          fetch-depth: 0
+      - name: Run gitleaks
+        env:
+          GITLEAKS_VERSION: 8.21.2
+        run: |
+          curl -sSL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+
   # Rust backend: format, lint, test, build across the whole Cargo workspace.
   backend:
     needs: changes
@@ -131,13 +151,17 @@ jobs:
   # affected job passed. Skipped stacks (unaffected) do not fail the gate.
   ci:
     if: always()
-    needs: [changes, backend, frontend, api-contract]
+    needs: [changes, secrets, backend, frontend, api-contract]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate result
         run: |
           if [ "${{ needs.changes.result }}" != "success" ]; then
             echo "changes job did not succeed"; exit 1
+          fi
+          # The secret scan always runs and must always pass.
+          if [ "${{ needs.secrets.result }}" != "success" ]; then
+            echo "secrets job did not succeed"; exit 1
           fi
           for stack in backend frontend api-contract; do
             case "$stack" in

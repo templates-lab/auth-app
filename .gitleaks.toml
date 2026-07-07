@@ -1,0 +1,22 @@
+# gitleaks configuration for the CI secret scan (bead authapp-a577c1).
+#
+# Start from gitleaks' built-in ruleset (AWS keys, private keys, provider
+# tokens, high-entropy strings, ...) and only *narrow* it with an allowlist for
+# places that legitimately hold fake credentials: the integration tests and the
+# committed `.env.example`. A real secret anywhere else still fails the scan.
+
+title = "auth-app secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials in tests and the env example are not real secrets"
+paths = [
+  # Integration/unit test fixtures use throwaway values (fake id_tokens,
+  # `client_secret = "secret"`, `whsec_test_secret`, ...).
+  '''.*/tests/.*''',
+  '''.*_it\.rs$''',
+  # The example env file ships placeholder values, never real ones.
+  '''\.env\.example$''',
+]

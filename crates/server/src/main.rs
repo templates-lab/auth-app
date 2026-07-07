@@ -37,7 +37,21 @@ mod config;
 use config::{AuthConfig, Config, OAuthSettings, PaymentProviderConfig};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    if let Err(error) = run().await {
+        // Surface the error's Display — a clear, operator-facing message such as
+        // "DATABASE_URL is required and must be non-empty" — rather than the
+        // Debug form the `Termination` default would print. A missing or
+        // malformed secret must fail fast with a message an operator can act on,
+        // and exit non-zero so an orchestrator sees the failure.
+        eprintln!("server: {error}");
+        std::process::exit(1);
+    }
+}
+
+/// Dispatch the CLI command. Any `Err` is rendered by [`main`] as a clear,
+/// operator-facing message before exiting non-zero.
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     match std::env::args().nth(1).as_deref() {
         Some("serve") | None => serve().await,
         Some("bootstrap-admin") => bootstrap_admin().await,
