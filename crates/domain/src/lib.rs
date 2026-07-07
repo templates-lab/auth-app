@@ -10,6 +10,7 @@
 pub mod audit;
 pub mod auth;
 pub mod health;
+pub mod oauth;
 pub mod session;
 
 pub use audit::{
@@ -21,6 +22,11 @@ pub use auth::{
     PasswordPolicy, PasswordPolicyError, PasswordRequirement, RepositoryError, Role, RoleError,
 };
 pub use health::{Health, HealthCheck, Readiness};
+pub use oauth::{
+    AuthorizeParams, ExchangeRequest, OAuthError, OAuthIdentity, OAuthIdentityRepository,
+    OAuthProvider, OAuthSecretGenerator, PendingAuthStore, PendingAuthorization, PkcePair,
+    ProviderId,
+};
 pub use session::{
     CsrfToken, Session, SessionPolicy, SessionRepository, SessionToken, SessionTokenGenerator,
 };

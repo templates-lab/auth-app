@@ -4,17 +4,19 @@
 //! translates HTTP requests into application calls and back; it holds no
 //! business logic and no storage concerns.
 
-use application::{AuditService, HealthService, LoginService, SessionService};
+use application::{AuditService, HealthService, LoginService, OAuthLoginService, SessionService};
 use axum::{extract::State, http::StatusCode, routing::get, Router};
 use domain::Readiness;
 
 pub mod audit;
 pub mod auth;
 pub mod cors;
+pub mod oauth;
 pub mod rate_limit;
 pub mod rbac;
 pub mod session;
 
+use oauth::OAuthRedirects;
 use rate_limit::RateLimitConfig;
 
 /// Build the HTTP router, injecting the application services as state.
@@ -24,15 +26,19 @@ use rate_limit::RateLimitConfig;
 /// never entangles it with another's state. New features add a `.merge(...)`
 /// line as they land. The CORS layer wraps the whole router last, so it
 /// applies (and answers preflight `OPTIONS`) uniformly across every route.
+///
+/// `oauth` is optional: `None` (or an [`OAuthLoginService`] with no configured
+/// providers) simply leaves the OAuth endpoints returning `404`.
 pub fn router(
     health: HealthService,
     login: LoginService,
     sessions: SessionService,
     audit: AuditService,
+    oauth: Option<(OAuthLoginService, OAuthRedirects)>,
     cors_allowed_origins: &[String],
     login_rate_limit: RateLimitConfig,
 ) -> Router {
-    Router::new()
+    let mut router = Router::new()
         .merge(health_routes(health))
         .merge(auth::routes(
             login,
@@ -41,8 +47,11 @@ pub fn router(
             login_rate_limit,
         ))
         .merge(session::routes(sessions.clone(), audit.clone()))
-        .merge(audit::routes(audit, sessions))
-        .layer(cors::layer(cors_allowed_origins))
+        .merge(audit::routes(audit.clone(), sessions.clone()));
+    if let Some((oauth, redirects)) = oauth {
+        router = router.merge(oauth::routes(oauth, sessions, audit, redirects));
+    }
+    router.layer(cors::layer(cors_allowed_origins))
 }
 
 /// The readiness-probe sub-router.

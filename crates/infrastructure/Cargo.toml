@@ -26,6 +26,14 @@ sqlx.workspace = true
 # work to `spawn_blocking` so it never stalls the async runtime.
 argon2.workspace = true
 tokio.workspace = true
+# OAuth/OIDC adapters: `reqwest` for the token/userinfo HTTP calls, `sha2` +
+# `base64` for the PKCE `S256` challenge and id_token payload decoding, and
+# `serde`/`serde_json` for parsing provider responses.
+reqwest.workspace = true
+sha2.workspace = true
+base64.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 # Test-only: `#[tokio::test]` still needs the macros; the runtime itself is now a
 # normal dependency above. `testkit` spins up the ephemeral Postgres the

@@ -18,7 +18,7 @@ web frontend, deployable behind Traefik with Postgres.
 │   ├── domain/          Auth/session business model and ports — no framework deps
 │   ├── payments/        Payments business model and ports — a second, independent domain
 │   ├── application/     Use cases orchestrating the domain
-│   ├── infrastructure/  Adapters implementing domain and payments ports
+│   ├── infrastructure/  Adapters implementing domain and payments ports (Postgres, argon2, OIDC)
 │   ├── api/             HTTP boundary (axum router)
 │   ├── server/          Composition root — the `server` binary
 │   ├── testkit/         Ephemeral-Postgres integration test harness (dev-only)
@@ -325,5 +325,71 @@ recompile.
 curl http://localhost:8080/auth/me --cookie "session=$SESSION"
 # 200 {"admin_id":"...","role":"admin"}
 ```
+
+## OAuth2 / OIDC sign-in
+
+Admins can also sign in through an external identity provider using the
+OAuth2 authorization-code flow with **PKCE**. The flow is behind the
+`OAuthProvider` trait (`crates/domain/src/oauth.rs`); a generic, config-driven
+OIDC adapter (`crates/infrastructure/src/oauth_provider.rs`) serves any
+standard OIDC provider, so **adding a provider is configuration, not code**. A
+non-OIDC provider (GitHub, say) is a new `impl OAuthProvider` next to it — the
+trait, not the struct, is the extension point.
+
+Two routes (both public — no session exists yet):
+
+```sh
+# 1. Start: 303 redirect to the provider's authorize URL (with state, nonce,
+#    and the PKCE S256 challenge). Unknown provider → 404.
+GET /auth/oauth/{provider}/start
+
+# 2. Callback: the provider sends the browser back here. The server validates
+#    state (one-shot — a replay finds nothing), exchanges the code with the
+#    PKCE verifier, validates the id_token's nonce/iss/aud/exp, resolves the
+#    identity, issues a session, and 303-redirects to OAUTH_SUCCESS_REDIRECT
+#    (or OAUTH_FAILURE_REDIRECT?error=oauth on any failure).
+GET /auth/oauth/{provider}/callback?state=...&code=...
+```
+
+Security properties, each enforced structurally:
+
+- **state** is a one-shot server-side value (`oauth_pending_authorizations`,
+  consumed by a `DELETE ... RETURNING`), so a callback cannot be replayed.
+- **PKCE** — the verifier never leaves the server; only its `S256` challenge
+  is sent in the authorize URL.
+- **nonce** — the id_token must echo the nonce the flow generated.
+- **Tokens never reach the frontend** — the provider adapter hands the
+  application only an `OAuthIdentity { provider, subject, email }`; there is no
+  access token or id_token in any type the delivery layer can see, let alone
+  leak.
+- **No silent admin provisioning** — an external identity signs in only if it
+  is already linked, or an admin account with its (provider-verified) email
+  exists (then it is linked). An unknown identity is refused.
+
+External identities are stored in their own table (`admin_oauth_identities`,
+`(provider, subject) -> admin_id`).
+
+Configuration (all optional; unset `OAUTH_PROVIDERS` disables OAuth entirely):
+
+| Variable                        | Meaning                                             |
+| ------------------------------- | --------------------------------------------------- |
+| `OAUTH_PROVIDERS`               | Comma-separated provider ids to enable (e.g. `google`) |
+| `OAUTH_REDIRECT_BASE`           | External origin for the callback URL (default `http://localhost:8080`) |
+| `OAUTH_SUCCESS_REDIRECT`        | Path after a successful sign-in (default `/`)       |
+| `OAUTH_FAILURE_REDIRECT`        | Path after a failed sign-in (default `/login`)      |
+| `OAUTH_<ID>_CLIENT_ID`          | The provider's OAuth client id                      |
+| `OAUTH_<ID>_CLIENT_SECRET`      | The provider's OAuth client secret                  |
+| `OAUTH_<ID>_AUTH_ENDPOINT`      | Authorization endpoint                              |
+| `OAUTH_<ID>_TOKEN_ENDPOINT`     | Token endpoint                                      |
+| `OAUTH_<ID>_USERINFO_ENDPOINT`  | Userinfo endpoint                                   |
+| `OAUTH_<ID>_ISSUER`             | Expected `iss` in the id_token                      |
+| `OAUTH_<ID>_SCOPES`             | Comma-separated scopes (default `openid,email`)     |
+
+> **Remaining hardening:** the adapter validates the id_token's claims
+> (nonce/iss/aud/exp) but does not yet verify its RS256 signature against the
+> provider's JWKS. This is safe as shipped because the id_token arrives
+> directly from the token endpoint over TLS (not via the browser) and the
+> identity of record comes from the bearer-authenticated userinfo call; adding
+> JWKS signature verification is the documented next step.
 
 [`PaymentProvider`]: crates/payments/src/provider.rs

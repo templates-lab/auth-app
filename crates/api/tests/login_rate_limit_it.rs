@@ -39,6 +39,7 @@ async fn router_with_rate_limit(pool: sqlx::PgPool, max_requests: u32) -> axum::
         login,
         sessions,
         audit,
+        None,
         &[],
         api::rate_limit::RateLimitConfig {
             max_requests,

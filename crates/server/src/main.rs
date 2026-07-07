@@ -20,17 +20,19 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use application::{
-    AuditService, BootstrapOutcome, BootstrapService, HealthService, LoginService, SessionService,
+    AuditService, BootstrapOutcome, BootstrapService, HealthService, LoginService,
+    OAuthLoginService, SessionService,
 };
 use contracts::{InMemoryExecutor, ModuleRegistry};
 use infrastructure::{
-    Argon2Hasher, PgAdminRepository, PgAuditRepository, PgConfig, PgHealthCheck, PgIpLockoutStore,
-    PgSessionRepository, SecureRandomTokens, SystemClock,
+    Argon2Hasher, OAuthSecrets, OidcProvider, PgAdminRepository, PgAuditRepository, PgConfig,
+    PgHealthCheck, PgIpLockoutStore, PgOAuthIdentityRepository, PgPendingAuthStore,
+    PgSessionRepository, ReqwestHttpClient, SecureRandomTokens, SystemClock,
 };
 
 mod config;
 
-use config::{AuthConfig, Config};
+use config::{AuthConfig, Config, OAuthSettings};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -100,11 +102,37 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         auth.session_policy,
     );
     let audit = AuditService::new(Arc::new(PgAuditRepository::new(pool.clone())));
+
+    // OAuth is optional: enabled only when providers are configured. The
+    // generic OIDC adapter serves every configured provider off one shared
+    // HTTP client — adding a provider is configuration, not code.
+    let oauth = OAuthSettings::from_env()?.map(|settings| {
+        let http = Arc::new(ReqwestHttpClient::new());
+        let providers = settings
+            .providers
+            .into_iter()
+            .map(|cfg| {
+                Arc::new(OidcProvider::new(cfg, http.clone())) as Arc<dyn domain::OAuthProvider>
+            })
+            .collect();
+        let service = OAuthLoginService::new(
+            providers,
+            Arc::new(PgPendingAuthStore::new(pool.clone())),
+            Arc::new(PgOAuthIdentityRepository::new(pool.clone())),
+            Arc::new(PgAdminRepository::new(pool.clone())),
+            Arc::new(OAuthSecrets),
+            Arc::new(SystemClock),
+            settings.redirect_base,
+        );
+        (service, settings.redirects)
+    });
+
     let app = modules.router(api::router(
         health,
         login,
         sessions,
         audit,
+        oauth,
         config.cors_allowed_origins(),
         auth.login_rate_limit,
     ));

@@ -4,9 +4,10 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 
+use api::oauth::OAuthRedirects;
 use api::rate_limit::RateLimitConfig;
-use domain::{LockoutPolicy, PasswordPolicy, SessionPolicy};
-use infrastructure::Argon2Params;
+use domain::{LockoutPolicy, PasswordPolicy, ProviderId, SessionPolicy};
+use infrastructure::{Argon2Params, OidcConfig};
 
 /// Runtime configuration for the HTTP server.
 #[derive(Debug, Clone)]
@@ -227,3 +228,114 @@ impl std::fmt::Display for AuthConfigError {
 }
 
 impl std::error::Error for AuthConfigError {}
+
+/// OAuth/OIDC configuration: the set of providers to enable and where the
+/// callback sends the browser afterward. Entirely optional — with no providers
+/// configured, the OAuth endpoints simply return `404`.
+#[derive(Debug, Clone)]
+pub(crate) struct OAuthSettings {
+    /// One [`OidcConfig`] per enabled provider.
+    pub(crate) providers: Vec<OidcConfig>,
+    /// The externally reachable origin the provider redirects back to.
+    pub(crate) redirect_base: String,
+    /// Where the callback sends the browser after success/failure.
+    pub(crate) redirects: OAuthRedirects,
+}
+
+impl OAuthSettings {
+    /// Read OAuth configuration from the environment.
+    ///
+    /// `OAUTH_PROVIDERS` is a comma-separated list of provider ids to enable
+    /// (e.g. `google`). For each id `X`, the per-provider settings are read
+    /// from `OAUTH_<X>_*` (uppercased):
+    ///
+    /// - `OAUTH_<X>_CLIENT_ID` / `_CLIENT_SECRET` (required)
+    /// - `OAUTH_<X>_AUTH_ENDPOINT` / `_TOKEN_ENDPOINT` / `_USERINFO_ENDPOINT` /
+    ///   `_ISSUER` (required)
+    /// - `OAUTH_<X>_SCOPES` (comma-separated, default `openid,email`)
+    ///
+    /// Plus:
+    /// - `OAUTH_REDIRECT_BASE` — the external origin (default
+    ///   `http://localhost:8080`)
+    /// - `OAUTH_SUCCESS_REDIRECT` (default `/`) / `OAUTH_FAILURE_REDIRECT`
+    ///   (default `/login`)
+    ///
+    /// Returns `None` when `OAUTH_PROVIDERS` is unset or empty. A configured
+    /// provider missing a required setting is an error, never a silent skip.
+    pub(crate) fn from_env() -> Result<Option<Self>, OAuthConfigError> {
+        let raw = std::env::var("OAUTH_PROVIDERS").unwrap_or_default();
+        let ids: Vec<&str> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if ids.is_empty() {
+            return Ok(None);
+        }
+
+        let mut providers = Vec::with_capacity(ids.len());
+        for id in ids {
+            let provider_id = ProviderId::parse(id)
+                .map_err(|e| OAuthConfigError(format!("invalid provider id {id:?}: {e}")))?;
+            let key = |suffix: &str| format!("OAUTH_{}_{suffix}", id.to_ascii_uppercase());
+            let required = |suffix: &str| -> Result<String, OAuthConfigError> {
+                std::env::var(key(suffix))
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or_else(|| OAuthConfigError(format!("{} is required", key(suffix))))
+            };
+            let scopes = std::env::var(key("SCOPES"))
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "openid,email".to_string())
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            providers.push(OidcConfig {
+                provider_id,
+                client_id: required("CLIENT_ID")?,
+                client_secret: required("CLIENT_SECRET")?,
+                auth_endpoint: required("AUTH_ENDPOINT")?,
+                token_endpoint: required("TOKEN_ENDPOINT")?,
+                userinfo_endpoint: required("USERINFO_ENDPOINT")?,
+                issuer: required("ISSUER")?,
+                scopes,
+            });
+        }
+
+        let redirect_base = std::env::var("OAUTH_REDIRECT_BASE")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "http://localhost:8080".to_string());
+        let redirects = OAuthRedirects {
+            success: std::env::var("OAUTH_SUCCESS_REDIRECT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "/".to_string()),
+            failure: std::env::var("OAUTH_FAILURE_REDIRECT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "/login".to_string()),
+        };
+
+        Ok(Some(Self {
+            providers,
+            redirect_base,
+            redirects,
+        }))
+    }
+}
+
+/// A missing or malformed OAuth configuration value.
+#[derive(Debug)]
+pub(crate) struct OAuthConfigError(String);
+
+impl std::fmt::Display for OAuthConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "oauth configuration error: {}", self.0)
+    }
+}
+
+impl std::error::Error for OAuthConfigError {}
