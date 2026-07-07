@@ -14,12 +14,14 @@ pub mod audit;
 pub mod auth;
 pub mod cors;
 pub mod oauth;
+pub mod openapi;
 pub mod payments_webhook;
 pub mod rate_limit;
 pub mod rbac;
 pub mod session;
 
 use oauth::OAuthRedirects;
+pub use openapi::ApiDoc;
 use rate_limit::RateLimitConfig;
 
 /// Build the HTTP router, injecting the application services as state.
@@ -75,7 +77,16 @@ fn health_routes(health: HealthService) -> Router {
 ///
 /// Awaits the application service, which in turn probes the live database, so a
 /// down or unreachable Postgres surfaces here as `503`.
-async fn health_handler(State(health): State<HealthService>) -> StatusCode {
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Ready"),
+        (status = 503, description = "Not ready (database unreachable)"),
+    ),
+    tag = "health",
+)]
+pub(crate) async fn health_handler(State(health): State<HealthService>) -> StatusCode {
     match health.health().await.readiness {
         Readiness::Ready => StatusCode::OK,
         Readiness::NotReady => StatusCode::SERVICE_UNAVAILABLE,

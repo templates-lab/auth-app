@@ -33,7 +33,7 @@ pub const CSRF_HEADER: &str = "x-csrf-token";
 /// State for the logout route: the session service it revokes through, and
 /// the audit trail it records the logout to.
 #[derive(Clone)]
-struct LogoutState {
+pub(crate) struct LogoutState {
     sessions: SessionService,
     audit: AuditService,
 }
@@ -201,9 +201,11 @@ fn to_offset_date_time(time: SystemTime) -> OffsetDateTime {
 
 /// The body `GET /auth/me` returns: enough for the frontend to know who is
 /// logged in and which role's guards to apply.
-#[derive(Debug, Serialize)]
-struct MeOut {
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct MeOut {
+    /// The authenticated administrator's opaque id.
     admin_id: String,
+    /// The administrator's role (e.g. `admin`).
     role: String,
 }
 
@@ -212,7 +214,16 @@ struct MeOut {
 /// a separate round trip. Any authenticated role may call this — it is not
 /// itself role-gated (see [`crate::rbac::require_role`] for endpoints that
 /// are).
-async fn me_handler(current: axum::Extension<CurrentSession>) -> impl IntoResponse {
+#[utoipa::path(
+    get,
+    path = "/auth/me",
+    responses(
+        (status = 200, description = "The authenticated admin's id and role", body = MeOut),
+        (status = 401, description = "No valid session"),
+    ),
+    tag = "auth",
+)]
+pub(crate) async fn me_handler(current: axum::Extension<CurrentSession>) -> impl IntoResponse {
     Json(MeOut {
         admin_id: current.0.admin_id.clone(),
         role: current.0.role.as_str().to_string(),
@@ -223,7 +234,17 @@ async fn me_handler(current: axum::Extension<CurrentSession>) -> impl IntoRespon
 /// event to the audit trail, and clear both cookies. Requires (via
 /// [`require_session`]) a valid session and a matching CSRF header — logout
 /// is a mutation like any other.
-async fn logout_handler(
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    responses(
+        (status = 204, description = "Logged out; clears the session and csrf cookies"),
+        (status = 401, description = "No valid session"),
+        (status = 403, description = "Missing or mismatched CSRF header"),
+    ),
+    tag = "auth",
+)]
+pub(crate) async fn logout_handler(
     State(state): State<LogoutState>,
     current: axum::Extension<CurrentSession>,
     ClientIp(client_ip): ClientIp,

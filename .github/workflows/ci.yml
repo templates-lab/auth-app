@@ -101,11 +101,37 @@ jobs:
       - name: Build
         run: pnpm run build
 
+  # API contract: regenerate the OpenAPI spec from the backend and the
+  # TypeScript client from the spec, then fail if either differs from what is
+  # committed — so a backend change that isn't reflected in the checked-in spec
+  # and client cannot merge. Runs when either stack (or the spec/client) moves.
+  api-contract:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Regenerate spec and client
+        run: pnpm run gen:api
+      - name: Fail if the spec or client is out of date
+        run: git diff --exit-code -- openapi.json packages/api-client/src/schema.ts
+
   # Single required status check for branch protection: green when every
   # affected job passed. Skipped stacks (unaffected) do not fail the gate.
   ci:
     if: always()
-    needs: [changes, backend, frontend]
+    needs: [changes, backend, frontend, api-contract]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate result
@@ -113,10 +139,11 @@ jobs:
           if [ "${{ needs.changes.result }}" != "success" ]; then
             echo "changes job did not succeed"; exit 1
           fi
-          for stack in backend frontend; do
+          for stack in backend frontend api-contract; do
             case "$stack" in
               backend) result="${{ needs.backend.result }}" ;;
               frontend) result="${{ needs.frontend.result }}" ;;
+              api-contract) result="${{ needs.api-contract.result }}" ;;
             esac
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "$stack job $result"; exit 1

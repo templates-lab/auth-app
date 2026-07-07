@@ -68,11 +68,32 @@ code changes, satisfying the open/closed boundary between features.
 Feature packages ship Solid source (`.tsx`) consumed directly by the app's Vite
 build (`vite-plugin-solid`); only `shared` and `feature-kit` compile to `dist`.
 
+### Typed API client (generated from OpenAPI)
+
+The contract between front and back is the backend's own OpenAPI spec — there
+are no hand-maintained duplicate types. The Rust API derives the spec from its
+handler annotations and request/response types (`utoipa`); `server openapi`
+prints it. From that spec, `@auth-app/api-client` is generated:
+
+```sh
+pnpm gen:api   # cargo run -p server -- openapi > openapi.json
+               # then openapi-typescript openapi.json -> packages/api-client/src/schema.ts
+```
+
+`@auth-app/api-client` wraps `openapi-fetch` with the generated `schema.ts`, so
+every path, body, query param, and response a feature calls is checked against
+the spec at compile time (`createApiClient({ baseUrl })`, `credentials:
+"include"` to carry the session cookie). **CI regenerates the spec and client
+and fails if either drifts** from what is committed (`pnpm check:api` /
+the `api-contract` job), so a backend change that isn't reflected in the client
+cannot merge. `openapi.json` and `schema.ts` are generated artifacts —
+committed, but excluded from Prettier/ESLint and never hand-edited.
+
 ### Theming, build, and serving
 
 - **Design tokens** live in `apps/web/src/shell/theme.css` — the single source
   of truth for the app's colours, spacing, radii, shadows, and type. Two
-  layers: raw *primitives* (palette + scales) and the *semantic tokens*
+  layers: raw _primitives_ (palette + scales) and the _semantic tokens_
   (`--color-bg`, `--space-4`, ...) that components actually reference. Nothing
   else hard-codes a visual constant, so re-theming is editing that one file. A
   **dark theme** ships alongside light, applied by the OS preference
@@ -83,10 +104,10 @@ build (`vite-plugin-solid`); only `shared` and `feature-kit` compile to `dist`.
   shell's initial bundle stays small; a feature's view is fetched on first
   visit.
 - **SPA fallback behind Traefik** — the production build (`pnpm --filter
-  @auth-app/web build`) is static files served by nginx
+@auth-app/web build`) is static files served by nginx
   (`infra/web/nginx.conf`) sitting behind Traefik's `web` router. Client
   routes like `/users` have no file on disk, so `try_files $uri $uri/
-  /index.html` hands any unmatched path to `@solidjs/router`; hashed assets are
+/index.html` hands any unmatched path to `@solidjs/router`; hashed assets are
   cached `immutable` for a year while `index.html` is `no-cache` so a deploy is
   picked up immediately.
 
@@ -214,23 +235,23 @@ ADMIN_BOOTSTRAP_PASSWORD='a-strong-secret-passphrase' \
 All of the following are optional and default to secure values; a
 present-but-unparseable value fails fast at startup.
 
-| Variable                           | Default | Meaning                            |
-| ---------------------------------- | ------- | ---------------------------------- |
-| `ADMIN_PASSWORD_MIN_LENGTH`        | `12`    | Minimum password length            |
-| `ADMIN_PASSWORD_REQUIRE_UPPERCASE` | `true`  | Require an uppercase letter        |
-| `ADMIN_PASSWORD_REQUIRE_LOWERCASE` | `true`  | Require a lowercase letter         |
-| `ADMIN_PASSWORD_REQUIRE_DIGIT`     | `true`  | Require a digit                    |
-| `ADMIN_PASSWORD_REQUIRE_SYMBOL`    | `false` | Require a symbol                   |
-| `ADMIN_LOCKOUT_MAX_ATTEMPTS`       | `5`     | Failures before lockout engages    |
-| `ADMIN_LOCKOUT_BASE_SECONDS`       | `60`    | First lock duration (then doubles) |
-| `ADMIN_LOCKOUT_MAX_SECONDS`        | `3600`  | Ceiling for the lock duration      |
-| `ARGON2_MEMORY_KIB`                | `19456` | argon2id memory cost (KiB)         |
-| `ARGON2_ITERATIONS`                | `2`     | argon2id iterations                |
-| `ARGON2_PARALLELISM`               | `1`     | argon2id parallelism               |
-| `SESSION_IDLE_TIMEOUT_SECS`        | `1800`  | Session dies after this much inactivity |
+| Variable                           | Default | Meaning                                                    |
+| ---------------------------------- | ------- | ---------------------------------------------------------- |
+| `ADMIN_PASSWORD_MIN_LENGTH`        | `12`    | Minimum password length                                    |
+| `ADMIN_PASSWORD_REQUIRE_UPPERCASE` | `true`  | Require an uppercase letter                                |
+| `ADMIN_PASSWORD_REQUIRE_LOWERCASE` | `true`  | Require a lowercase letter                                 |
+| `ADMIN_PASSWORD_REQUIRE_DIGIT`     | `true`  | Require a digit                                            |
+| `ADMIN_PASSWORD_REQUIRE_SYMBOL`    | `false` | Require a symbol                                           |
+| `ADMIN_LOCKOUT_MAX_ATTEMPTS`       | `5`     | Failures before lockout engages                            |
+| `ADMIN_LOCKOUT_BASE_SECONDS`       | `60`    | First lock duration (then doubles)                         |
+| `ADMIN_LOCKOUT_MAX_SECONDS`        | `3600`  | Ceiling for the lock duration                              |
+| `ARGON2_MEMORY_KIB`                | `19456` | argon2id memory cost (KiB)                                 |
+| `ARGON2_ITERATIONS`                | `2`     | argon2id iterations                                        |
+| `ARGON2_PARALLELISM`               | `1`     | argon2id parallelism                                       |
+| `SESSION_IDLE_TIMEOUT_SECS`        | `1800`  | Session dies after this much inactivity                    |
 | `SESSION_ABSOLUTE_TIMEOUT_SECS`    | `43200` | Session dies this long after login, regardless of activity |
-| `LOGIN_RATE_LIMIT_MAX_REQUESTS`    | `10`    | Login attempts allowed per window, per IP and per account |
-| `LOGIN_RATE_LIMIT_WINDOW_SECS`     | `60`    | The login rate limit's window duration |
+| `LOGIN_RATE_LIMIT_MAX_REQUESTS`    | `10`    | Login attempts allowed per window, per IP and per account  |
+| `LOGIN_RATE_LIMIT_WINDOW_SECS`     | `60`    | The login rate limit's window duration                     |
 
 ## Payments
 
@@ -271,11 +292,11 @@ application logic:
   cents `02` force a timeout, anything else succeeds — and created intents are
   tracked so capture/refund/status stay coherent.
 
-| Variable            | Meaning                                                     |
-| ------------------- | ---------------------------------------------------------- |
-| `PAYMENT_PROVIDER`  | `stripe` \| `fake` \| unset/`none` (disabled)              |
-| `STRIPE_SECRET_KEY` | Required for `stripe` (`sk_test_...` or `sk_live_...`)     |
-| `STRIPE_API_BASE`   | Optional; defaults to `https://api.stripe.com`             |
+| Variable            | Meaning                                                |
+| ------------------- | ------------------------------------------------------ |
+| `PAYMENT_PROVIDER`  | `stripe` \| `fake` \| unset/`none` (disabled)          |
+| `STRIPE_SECRET_KEY` | Required for `stripe` (`sk_test_...` or `sk_live_...`) |
+| `STRIPE_API_BASE`   | Optional; defaults to `https://api.stripe.com`         |
 
 ### Webhooks
 
@@ -305,8 +326,8 @@ Postgres):
 - **Raw events persisted** — every receipt (accepted or rejected) is written
   to `payments.webhook_events` verbatim, for diagnostics and replay.
 
-| Variable                | Meaning                                                |
-| ----------------------- | ------------------------------------------------------ |
+| Variable                | Meaning                                                  |
+| ----------------------- | -------------------------------------------------------- |
 | `STRIPE_WEBHOOK_SECRET` | Endpoint signing secret (`whsec_...`); enables the route |
 
 Still to come as its own bead: a transactions view in the admin panel (a
@@ -321,7 +342,7 @@ Two layers, split by what each is good at:
   subdomains, preload), `X-Content-Type-Options: nosniff`, a strict
   `Content-Security-Policy` (no `unsafe-inline`/`unsafe-eval` anywhere —
   `default-src 'self'` plus per-directive `'self'`), and `frame-ancestors
-  'none'` (paired with `X-Frame-Options: DENY` for older browsers).
+'none'` (paired with `X-Frame-Options: DENY` for older browsers).
 - **The API** (`crates/api/src/cors.rs`) owns CORS, because it needs
   per-request `Origin` matching and preflight (`OPTIONS`) handling that a
   static header cannot express. `CORS_ALLOWED_ORIGINS` (comma-separated exact
@@ -343,10 +364,10 @@ Two layers again:
   IP, bursting to 100) — it protects the service regardless of route, but it
   cannot see the request body.
 - **The app** (`crates/api/src/rate_limit.rs`) adds a finer-grained,
-  in-memory, fixed-window limiter for `/auth/login`, applied *independently*
+  in-memory, fixed-window limiter for `/auth/login`, applied _independently_
   per client IP and per submitted account email (`LOGIN_RATE_LIMIT_MAX_REQUESTS`
   per `LOGIN_RATE_LIMIT_WINDOW_SECS`, defaults `10`/`60`). This is a distinct
-  mechanism from the account/IP *lockout* in [Admin authentication](#admin-authentication):
+  mechanism from the account/IP _lockout_ in [Admin authentication](#admin-authentication):
   lockout only counts failed attempts and persists in Postgres; the rate
   limiter counts every attempt (successful or not) and lives only in that
   process's memory — a defense-in-depth layer behind Traefik's shared,
@@ -378,7 +399,7 @@ curl http://localhost:8080/audit/events?limit=20 \
 Refresh-token events, OAuth account linking, and password-change events join
 this trail once those features exist (`AuditEventType` is a closed set that
 gains a variant per new feature, not a free-form string); the admin panel's
-own audit *view* is a separate frontend task — this backend query endpoint is
+own audit _view_ is a separate frontend task — this backend query endpoint is
 the surface it will call.
 
 ## Roles (RBAC)
@@ -388,7 +409,7 @@ there is no "create user" endpoint yet — only ever `admin`, assigned by
 bootstrap). The role rides along on the session as a snapshot, the same
 trade-off already made for the CSRF token: it is set once at login and does
 not change mid-session, so changing an account's role takes effect on that
-account's *next* login, not immediately. `Role` is a validated string, not a
+account's _next_ login, not immediately. `Role` is a validated string, not a
 closed Rust enum — adding a role (`"editor"`, say) is a data change, not a
 recompile.
 
@@ -449,19 +470,19 @@ External identities are stored in their own table (`admin_oauth_identities`,
 
 Configuration (all optional; unset `OAUTH_PROVIDERS` disables OAuth entirely):
 
-| Variable                        | Meaning                                             |
-| ------------------------------- | --------------------------------------------------- |
-| `OAUTH_PROVIDERS`               | Comma-separated provider ids to enable (e.g. `google`) |
-| `OAUTH_REDIRECT_BASE`           | External origin for the callback URL (default `http://localhost:8080`) |
-| `OAUTH_SUCCESS_REDIRECT`        | Path after a successful sign-in (default `/`)       |
-| `OAUTH_FAILURE_REDIRECT`        | Path after a failed sign-in (default `/login`)      |
-| `OAUTH_<ID>_CLIENT_ID`          | The provider's OAuth client id                      |
-| `OAUTH_<ID>_CLIENT_SECRET`      | The provider's OAuth client secret                  |
-| `OAUTH_<ID>_AUTH_ENDPOINT`      | Authorization endpoint                              |
-| `OAUTH_<ID>_TOKEN_ENDPOINT`     | Token endpoint                                      |
-| `OAUTH_<ID>_USERINFO_ENDPOINT`  | Userinfo endpoint                                   |
-| `OAUTH_<ID>_ISSUER`             | Expected `iss` in the id_token                      |
-| `OAUTH_<ID>_SCOPES`             | Comma-separated scopes (default `openid,email`)     |
+| Variable                       | Meaning                                                                |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `OAUTH_PROVIDERS`              | Comma-separated provider ids to enable (e.g. `google`)                 |
+| `OAUTH_REDIRECT_BASE`          | External origin for the callback URL (default `http://localhost:8080`) |
+| `OAUTH_SUCCESS_REDIRECT`       | Path after a successful sign-in (default `/`)                          |
+| `OAUTH_FAILURE_REDIRECT`       | Path after a failed sign-in (default `/login`)                         |
+| `OAUTH_<ID>_CLIENT_ID`         | The provider's OAuth client id                                         |
+| `OAUTH_<ID>_CLIENT_SECRET`     | The provider's OAuth client secret                                     |
+| `OAUTH_<ID>_AUTH_ENDPOINT`     | Authorization endpoint                                                 |
+| `OAUTH_<ID>_TOKEN_ENDPOINT`    | Token endpoint                                                         |
+| `OAUTH_<ID>_USERINFO_ENDPOINT` | Userinfo endpoint                                                      |
+| `OAUTH_<ID>_ISSUER`            | Expected `iss` in the id_token                                         |
+| `OAUTH_<ID>_SCOPES`            | Comma-separated scopes (default `openid,email`)                        |
 
 > **Remaining hardening:** the adapter validates the id_token's claims
 > (nonce/iss/aud/exp) but does not yet verify its RS256 signature against the

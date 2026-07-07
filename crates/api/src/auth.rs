@@ -21,6 +21,7 @@ use axum::{Json, Router};
 use axum_extra::extract::cookie::CookieJar;
 use domain::{AuditEventType, NewAuditEvent};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::rate_limit::{RateLimitConfig, RateLimiter};
 use crate::session::attach_session_cookies;
@@ -29,7 +30,7 @@ use crate::session::attach_session_cookies;
 /// successful login hands off to, the audit trail, and the app-level rate
 /// limiter guarding the route independently of Traefik's edge-wide limit.
 #[derive(Clone)]
-struct LoginState {
+pub(crate) struct LoginState {
     login: LoginService,
     sessions: SessionService,
     audit: AuditService,
@@ -59,15 +60,19 @@ pub fn routes(
 }
 
 /// The JSON body of a login request.
-#[derive(Debug, Deserialize)]
-struct LoginBody {
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct LoginBody {
+    /// The administrator's email address.
+    #[schema(example = "admin@example.com")]
     email: String,
+    /// The administrator's password.
     password: String,
 }
 
 /// The success body: the authenticated administrator's id.
-#[derive(Debug, Serialize)]
-struct LoginOk {
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LoginOk {
+    /// The authenticated administrator's opaque id.
     admin_id: String,
 }
 
@@ -139,7 +144,19 @@ fn forwarded_ip(parts: &Parts) -> Option<String> {
 /// an internal failure. Every successful login issues a brand-new session —
 /// there is no "reuse the prior session" path — which is what satisfies
 /// session rotation on login.
-async fn login_handler(
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    request_body = LoginBody,
+    responses(
+        (status = 200, description = "Signed in; sets session and csrf cookies", body = LoginOk),
+        (status = 401, description = "Invalid credentials (wrong password or unknown account)"),
+        (status = 429, description = "Rate-limited or locked out; carries Retry-After"),
+        (status = 500, description = "Internal error"),
+    ),
+    tag = "auth",
+)]
+pub(crate) async fn login_handler(
     State(state): State<LoginState>,
     ClientIp(client_ip): ClientIp,
     headers: HeaderMap,

@@ -41,13 +41,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match std::env::args().nth(1).as_deref() {
         Some("serve") | None => serve().await,
         Some("bootstrap-admin") => bootstrap_admin().await,
+        // Print the OpenAPI spec to stdout and exit. Needs no database; the
+        // monorepo's `gen:api` script pipes this into the TypeScript client
+        // generator.
+        Some("openapi") => {
+            println!("{}", api::ApiDoc::to_pretty_json());
+            Ok(())
+        }
         Some(other) => {
             eprintln!(
                 "server: unknown command {other:?}\n\n\
                  Commands:\n  \
                  serve            Run the HTTP server (default)\n  \
                  bootstrap-admin  Create the first admin from \
-                 ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD"
+                 ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD\n  \
+                 openapi          Print the OpenAPI spec (for client generation)"
             );
             Err("unknown command".into())
         }

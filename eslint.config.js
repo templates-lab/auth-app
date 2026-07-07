@@ -18,6 +18,8 @@ export default tseslint.config(
       "**/coverage/**",
       "**/*.config.js",
       "**/*.config.ts",
+      // Generated from the backend OpenAPI spec (`pnpm gen:api`); not hand-edited.
+      "packages/api-client/src/schema.ts",
     ],
   },
   js.configs.recommended,

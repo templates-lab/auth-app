@@ -3,6 +3,12 @@
 **/coverage/**
 pnpm-lock.yaml
 
+# Generated from the backend OpenAPI spec (`pnpm gen:api`). Formatted by their
+# generators (utoipa / openapi-typescript), not Prettier — reformatting them
+# here would drift from the generator output and break the CI staleness check.
+openapi.json
+packages/api-client/src/schema.ts
+
 # Agent / harness files (not part of the app)
 .claude/
 .gt-config/

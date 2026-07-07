@@ -44,8 +44,10 @@ pub fn routes(audit: AuditService, sessions: SessionService) -> Router {
 
 /// `?limit=` query parameter, capped well below anything that could turn one
 /// request into an unbounded table scan.
-#[derive(Debug, Deserialize)]
-struct ListQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub(crate) struct ListQuery {
+    /// Maximum number of events to return (default 50, capped at 200).
     limit: Option<u32>,
 }
 
@@ -53,14 +55,23 @@ const DEFAULT_LIMIT: u32 = 50;
 const MAX_LIMIT: u32 = 200;
 
 /// One audit event, as returned to the admin panel.
-#[derive(Debug, Serialize)]
-struct EventOut {
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct EventOut {
+    /// The event's opaque id.
     id: String,
+    /// The event type (`login_succeeded`, `login_failed`, `locked_out`,
+    /// `logged_out`).
     event_type: String,
+    /// The resolved admin id, when the event maps to a known account.
     admin_id: Option<String>,
+    /// The email submitted, for login events (kept even when it matched no
+    /// account).
     email_attempted: Option<String>,
+    /// The client IP the request came from.
     ip: String,
+    /// The client `User-Agent`, if any.
     user_agent: Option<String>,
+    /// When the event happened, as Unix epoch seconds.
     occurred_at_epoch: u64,
 }
 
@@ -89,7 +100,22 @@ struct ErrorBody {
 
 /// Handle `GET /audit/events?limit=`: the most recent audit events, newest
 /// first, capped at [`MAX_LIMIT`] regardless of what the caller asks for.
-async fn list_events(State(audit): State<AuditService>, Query(q): Query<ListQuery>) -> Response {
+#[utoipa::path(
+    get,
+    path = "/audit/events",
+    params(ListQuery),
+    responses(
+        (status = 200, description = "Recent audit events, newest first", body = [EventOut]),
+        (status = 401, description = "No valid session"),
+        (status = 403, description = "Authenticated but not the admin role"),
+        (status = 500, description = "Internal error"),
+    ),
+    tag = "audit",
+)]
+pub(crate) async fn list_events(
+    State(audit): State<AuditService>,
+    Query(q): Query<ListQuery>,
+) -> Response {
     let limit = q.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
     match audit.recent(limit).await {
         Ok(events) => {

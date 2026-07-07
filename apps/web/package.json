@@ -13,6 +13,7 @@
   "dependencies": {
     "@auth-app/feature-dashboard": "workspace:*",
     "@auth-app/feature-kit": "workspace:*",
+    "@auth-app/api-client": "workspace:*",
     "@auth-app/feature-users": "workspace:*",
     "@auth-app/shared": "workspace:*",
     "@solidjs/router": "^0.15.3",

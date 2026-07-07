@@ -1,0 +1,285 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "auth-app API",
+    "description": "The JSON API the admin frontend consumes.",
+    "contact": {
+      "name": "auth-app template"
+    },
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/audit/events": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Handle `GET /audit/events?limit=`: the most recent audit events, newest\nfirst, capped at [`MAX_LIMIT`] regardless of what the caller asks for.",
+        "operationId": "list_events",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of events to return (default 50, capped at 200).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent audit events, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventOut"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session"
+          },
+          "403": {
+            "description": "Authenticated but not the admin role"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Handle `POST /auth/login`.",
+        "description": "`200` with the admin id and fresh session/CSRF cookies on success; `401`\nfor invalid credentials (identical for a wrong password and a nonexistent\naccount); `429` with `Retry-After` when the IP or account has hit the\napp-level rate limit, or when the account/IP is locked out (see\n[`LoginError::TooManyAttempts`] — a distinct mechanism from the rate limit:\nlockout counts *failures*, the rate limit counts *every* attempt); `500` on\nan internal failure. Every successful login issues a brand-new session —\nthere is no \"reuse the prior session\" path — which is what satisfies\nsession rotation on login.",
+        "operationId": "login_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Signed in; sets session and csrf cookies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials (wrong password or unknown account)"
+          },
+          "429": {
+            "description": "Rate-limited or locked out; carries Retry-After"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Handle `POST /auth/logout`: revoke the session server-side, record the\nevent to the audit trail, and clear both cookies. Requires (via\n[`require_session`]) a valid session and a matching CSRF header — logout\nis a mutation like any other.",
+        "operationId": "logout_handler",
+        "responses": {
+          "204": {
+            "description": "Logged out; clears the session and csrf cookies"
+          },
+          "401": {
+            "description": "No valid session"
+          },
+          "403": {
+            "description": "Missing or mismatched CSRF header"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Handle `GET /auth/me`: report the authenticated admin's id and role, so\nfrontend guards can hide routes/actions the role does not permit without\na separate round trip. Any authenticated role may call this — it is not\nitself role-gated (see [`crate::rbac::require_role`] for endpoints that\nare).",
+        "operationId": "me_handler",
+        "responses": {
+          "200": {
+            "description": "The authenticated admin's id and role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness probe: `200 OK` when ready, `503 Service Unavailable` otherwise.",
+        "description": "Awaits the application service, which in turn probes the live database, so a\ndown or unreachable Postgres surfaces here as `503`.",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "Ready"
+          },
+          "503": {
+            "description": "Not ready (database unreachable)"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EventOut": {
+        "type": "object",
+        "description": "One audit event, as returned to the admin panel.",
+        "required": [
+          "id",
+          "event_type",
+          "ip",
+          "occurred_at_epoch"
+        ],
+        "properties": {
+          "admin_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The resolved admin id, when the event maps to a known account."
+          },
+          "email_attempted": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The email submitted, for login events (kept even when it matched no\naccount)."
+          },
+          "event_type": {
+            "type": "string",
+            "description": "The event type (`login_succeeded`, `login_failed`, `locked_out`,\n`logged_out`)."
+          },
+          "id": {
+            "type": "string",
+            "description": "The event's opaque id."
+          },
+          "ip": {
+            "type": "string",
+            "description": "The client IP the request came from."
+          },
+          "occurred_at_epoch": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When the event happened, as Unix epoch seconds.",
+            "minimum": 0
+          },
+          "user_agent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The client `User-Agent`, if any."
+          }
+        }
+      },
+      "LoginBody": {
+        "type": "object",
+        "description": "The JSON body of a login request.",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The administrator's email address.",
+            "example": "admin@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "The administrator's password."
+          }
+        }
+      },
+      "LoginOk": {
+        "type": "object",
+        "description": "The success body: the authenticated administrator's id.",
+        "required": [
+          "admin_id"
+        ],
+        "properties": {
+          "admin_id": {
+            "type": "string",
+            "description": "The authenticated administrator's opaque id."
+          }
+        }
+      },
+      "MeOut": {
+        "type": "object",
+        "description": "The body `GET /auth/me` returns: enough for the frontend to know who is\nlogged in and which role's guards to apply.",
+        "required": [
+          "admin_id",
+          "role"
+        ],
+        "properties": {
+          "admin_id": {
+            "type": "string",
+            "description": "The authenticated administrator's opaque id."
+          },
+          "role": {
+            "type": "string",
+            "description": "The administrator's role (e.g. `admin`)."
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Sign-in, session, and identity"
+    },
+    {
+      "name": "audit",
+      "description": "Authentication audit trail"
+    },
+    {
+      "name": "health",
+      "description": "Readiness probe"
+    }
+  ]
+}

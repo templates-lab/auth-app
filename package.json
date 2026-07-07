@@ -15,7 +15,11 @@
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "gen:openapi": "cargo run --quiet -p server -- openapi > openapi.json",
+    "gen:api-client": "pnpm --filter @auth-app/api-client run generate",
+    "gen:api": "pnpm run gen:openapi && pnpm run gen:api-client",
+    "check:api": "pnpm run gen:api && git diff --exit-code -- openapi.json packages/api-client/src/schema.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -25,6 +25,9 @@ axum-extra.workspace = true
 time.workspace = true
 # JSON request/response bodies at the HTTP boundary.
 serde.workspace = true
+# OpenAPI derivation for the JSON API (the contract the TS client is generated
+# from).
+utoipa.workspace = true
 # Explicit-allowlist CORS layer (never a wildcard).
 tower-http.workspace = true
 
