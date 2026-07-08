@@ -129,3 +129,11 @@ docker compose -f compose.yml -f compose.prod.yml --profile prod --profile backu
 Logs are structured JSON (one object per line) with a `request_id` per request,
 which is also returned in the `x-request-id` response header — set `RUST_LOG` to
 adjust verbosity (default `info`). Ship container stdout to your log collector.
+
+## Security
+
+Before going live, work through [`SECURITY.md`](SECURITY.md) — the security
+baseline checklist (mapped to OWASP ASVS). It marks what the template already
+covers and the per-instance items you must complete: unique secrets per
+environment, real provider keys, resource-level authorization for any new
+domains, and your data-protection decisions.
