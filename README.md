@@ -8,31 +8,46 @@ web frontend, deployable behind Traefik with Postgres.
 ```
 .
 ├── apps/          Frontend applications (pnpm workspace)
-│   └── web/       Vite + SolidJS admin shell (@auth-app/web)
+│   └── web/       Vite + SolidJS admin shell + auth screens (@auth-app/web)
 ├── packages/      Shared + feature packages (pnpm workspace)
-│   ├── shared/            Framework-agnostic shared utilities (@auth-app/shared)
-│   ├── feature-kit/       Feature contract for the shell (@auth-app/feature-kit)
-│   ├── feature-dashboard/ Dashboard feature (@auth-app/feature-dashboard)
-│   └── feature-users/     Users feature (@auth-app/feature-users)
-├── crates/        Rust backend (Cargo workspace, hexagonal architecture)
+│   ├── shared/              Framework-agnostic shared utilities (@auth-app/shared)
+│   ├── feature-kit/         Feature contract for the shell (@auth-app/feature-kit)
+│   ├── api-client/          Typed API client generated from OpenAPI (@auth-app/api-client)
+│   ├── query/               TanStack Query config: keys, 401 handling (@auth-app/query)
+│   ├── feature-dashboard/   Dashboard feature (@auth-app/feature-dashboard)
+│   ├── feature-users/       Users feature (@auth-app/feature-users)
+│   └── feature-transactions/ Transactions feature — list/detail/refund (@auth-app/feature-transactions)
+├── crates/        Rust backend (Cargo workspace, hexagonal architecture — ADR 0001)
 │   ├── domain/          Auth/session business model and ports — no framework deps
 │   ├── payments/        Payments business model and ports — a second, independent domain
 │   ├── application/     Use cases orchestrating the domain
-│   ├── infrastructure/  Adapters implementing domain and payments ports (Postgres, argon2, OIDC)
-│   ├── api/             HTTP boundary (axum router)
+│   ├── infrastructure/  Adapters implementing domain and payments ports (Postgres, argon2, OIDC, Stripe)
+│   ├── api/             HTTP boundary (axum router, typed errors, request-id tracing)
+│   ├── contracts/       The pluggable-module contract (ADR 0002) — Module, migrations, registry
+│   ├── module-demo/     A worked example module (implements `contracts::Module`)
 │   ├── server/          Composition root — the `server` binary
 │   ├── testkit/         Ephemeral-Postgres integration test harness (dev-only)
 │   └── xtask/           Workspace automation (`cargo xtask`)
 ├── infra/         Deployment
-│   ├── docker/    Dockerfiles
-│   └── traefik/   Traefik routing and TLS
-└── docs/          Architecture and operations docs
+│   ├── docker/    Multi-stage, non-root Dockerfiles (api, web)
+│   ├── traefik/   Traefik edge: routing and Let's Encrypt TLS
+│   ├── postgres/  Postgres service: healthcheck, least-privilege role, backups
+│   └── web/       nginx config for the static SPA
+├── compose.yml / compose.override.yml / compose.prod.yml   Dev + prod stack (profiles)
+├── deny.toml / .env.example                                CI dep-audit config; env template
+└── docs/          Architecture (ADRs), deployment, security, and the module guide
+    ├── adr/                 Architecture Decision Records
+    ├── adding-a-module.md   Step-by-step: add a feature without touching others
+    ├── DEPLOYMENT.md        Zero-to-running-stack guide
+    └── SECURITY.md          Security baseline checklist (OWASP ASVS)
 ```
 
 The Rust crates form a Cargo workspace rooted at `Cargo.toml`; the frontend
 apps and packages form a separate pnpm workspace. The two toolchains stay
 decoupled on purpose so a change on one side never forces a rebuild of the
-other.
+other. The _why_ behind the structure is recorded in
+[`docs/adr/`](docs/adr/README.md); to add a feature, follow
+[`docs/adding-a-module.md`](docs/adding-a-module.md).
 
 Shared frontend tooling lives at the repo root and is inherited by every
 package:
@@ -200,8 +215,8 @@ curl -X POST http://localhost:8080/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"admin@example.com","password":"..."}'
 # 200 {"admin_id":"..."} on success, plus Set-Cookie: session=... and csrf=...
-# 401 {"error":"invalid_credentials"} for a wrong password OR unknown account
-# 429 {"error":"too_many_attempts"} (+ Retry-After) when locked out
+# 401 {"code":"invalid_credentials",...} for a wrong password OR unknown account
+# 429 {"code":"too_many_attempts",...} (+ Retry-After) when locked out
 ```
 
 ### Sessions and CSRF
@@ -228,8 +243,8 @@ curl -X POST http://localhost:8080/auth/logout \
   --cookie "session=$SESSION; csrf=$CSRF" \
   -H "x-csrf-token: $CSRF"
 # 204 on success (idempotent — an already-expired session still clears cookies)
-# 401 {"error":"unauthorized"} for a missing/invalid/expired session
-# 403 {"error":"csrf_mismatch"} for a missing/mismatched CSRF header
+# 401 {"code":"unauthorized",...} for a missing/invalid/expired session
+# 403 {"code":"csrf_mismatch",...} for a missing/mismatched CSRF header
 ```
 
 ### Bootstrapping the first admin
@@ -406,8 +421,8 @@ a real login or logout.
 curl http://localhost:8080/audit/events?limit=20 \
   --cookie "session=$SESSION"
 # 200 [{"event_type":"login_succeeded","admin_id":"...","email_attempted":"...", ...}, ...]
-# 401 {"error":"unauthorized"} without a valid session
-# 403 {"error":"forbidden"} with a valid session that isn't `admin` (see Roles below)
+# 401 {"code":"unauthorized",...} without a valid session
+# 403 {"code":"forbidden",...} with a valid session that isn't `admin` (see Roles below)
 ```
 
 Refresh-token events, OAuth account linking, and password-change events join
