@@ -1,7 +1,8 @@
 import { createMemo, For, Show, type Component } from "solid-js";
 import { A, useParams } from "@solidjs/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
-import { authKeys, getMe, getTransaction, refundTransaction, transactionsKeys } from "./api";
+import { useHasRole } from "@auth-app/feature-kit";
+import { getTransaction, refundTransaction, transactionsKeys } from "./api";
 import { formatEpoch, formatMoney, formatStatus } from "./format";
 
 /** The statuses a payment can still be refunded from. */
@@ -22,14 +23,7 @@ export const TransactionDetail: Component = () => {
     queryFn: () => getTransaction(params.id),
   }));
 
-  // The current admin's role gates the refund action; cached briefly and shared
-  // under its own key so it is fetched once, not per payment.
-  const me = useQuery(() => ({
-    queryKey: authKeys.detail("me"),
-    queryFn: getMe,
-    staleTime: 5 * 60 * 1000,
-  }));
-  const isAdmin = () => me.data?.role === "admin";
+  const isAdmin = useHasRole("admin");
 
   const refund = useMutation(() => ({
     mutationFn: () => refundTransaction(params.id),
@@ -41,7 +35,7 @@ export const TransactionDetail: Component = () => {
   }));
 
   const status = () => detail.data?.transaction.status;
-  const canRefund = createMemo(() => isAdmin() && !!status() && REFUNDABLE.has(status() as string));
+  const canRefund = createMemo(() => isAdmin && !!status() && REFUNDABLE.has(status() as string));
 
   const onRefund = () => {
     if (!window.confirm("Refund this payment in full? This cannot be undone.")) {

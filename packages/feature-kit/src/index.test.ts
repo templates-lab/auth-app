@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_NAV_ORDER, defineFeature, type FeatureModule } from "./index";
+import { DEFAULT_NAV_ORDER, defineFeature, isRoleAllowed, type FeatureModule } from "./index";
 
 describe("defineFeature", () => {
   it("returns the module unchanged (identity)", () => {
@@ -15,5 +15,23 @@ describe("defineFeature", () => {
 describe("DEFAULT_NAV_ORDER", () => {
   it("is a stable numeric fallback weight", () => {
     expect(DEFAULT_NAV_ORDER).toBe(100);
+  });
+});
+
+describe("isRoleAllowed", () => {
+  it("returns true when allowedRoles is undefined", () => {
+    expect(isRoleAllowed("viewer")).toBe(true);
+  });
+
+  it("returns true when allowedRoles is empty", () => {
+    expect(isRoleAllowed("viewer", [])).toBe(true);
+  });
+
+  it("returns true when userRole is in allowedRoles", () => {
+    expect(isRoleAllowed("admin", ["admin", "owner"])).toBe(true);
+  });
+
+  it("returns false when userRole is not in allowedRoles", () => {
+    expect(isRoleAllowed("viewer", ["admin"])).toBe(false);
   });
 });

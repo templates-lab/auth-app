@@ -15,17 +15,11 @@ export type TransactionPage = components["schemas"]["TransactionPage"];
 export type TransactionDetail = components["schemas"]["TransactionDetailOut"];
 /** One recorded status change. */
 export type StatusChange = components["schemas"]["StatusChangeOut"];
-/** The authenticated admin's identity, used to gate the refund action. */
-export type Me = components["schemas"]["MeOut"];
-
 /**
  * The feature's query-key namespace (AC: query keys tipadas y centralizadas por
  * feature). Every query and every invalidation derives its key from here.
  */
 export const transactionsKeys = createFeatureKeys("transactions");
-
-/** The current admin identity — its own tiny namespace, shared read-only. */
-export const authKeys = createFeatureKeys("auth");
 
 /**
  * Filters + paging the list view drives. A `type` (not an `interface`) so it
@@ -75,11 +69,6 @@ export function refundTransaction(id: string): Promise<components["schemas"]["Re
       headers: csrfHeader(),
     }),
   );
-}
-
-/** Fetch the authenticated admin's identity (id + role). */
-export function getMe(): Promise<Me> {
-  return unwrap(api.GET("/auth/me"));
 }
 
 /**

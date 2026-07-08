@@ -38,6 +38,47 @@ describe("collectNav", () => {
     const b = defineFeature({ id: "b", title: "B", nav: [{ path: "/b", label: "B" }], routes: [] });
     expect(collectNav([b, a]).map((item) => item.label)).toEqual(["B", "A"]);
   });
+
+  it("excludes nav items whose roles do not match the user role", () => {
+    const mixed = defineFeature({
+      id: "mixed",
+      title: "Mixed",
+      nav: [
+        { path: "/public", label: "Public", order: 1 },
+        { path: "/admin-only", label: "Admin Only", order: 2, roles: ["admin"] },
+      ],
+      routes: [],
+    });
+    expect(collectNav([mixed], "viewer").map((i) => i.label)).toEqual(["Public"]);
+    expect(collectNav([mixed], "admin").map((i) => i.label)).toEqual(["Public", "Admin Only"]);
+  });
+
+  it("excludes all nav items when feature-level roles do not match", () => {
+    const restricted = defineFeature({
+      id: "restricted",
+      title: "Restricted",
+      roles: ["admin"],
+      nav: [{ path: "/secret", label: "Secret", order: 1 }],
+      routes: [],
+    });
+    expect(collectNav([restricted], "viewer")).toEqual([]);
+    expect(collectNav([restricted], "admin").map((i) => i.label)).toEqual(["Secret"]);
+  });
+
+  it("shows items without roles to any user role", () => {
+    expect(collectNav([alpha, beta], "viewer").map((i) => i.label)).toEqual(["Home", "Alpha"]);
+  });
+
+  it("shows all items when userRole is omitted", () => {
+    const restricted = defineFeature({
+      id: "r",
+      title: "R",
+      roles: ["admin"],
+      nav: [{ path: "/r", label: "R" }],
+      routes: [],
+    });
+    expect(collectNav([restricted]).map((i) => i.label)).toEqual(["R"]);
+  });
 });
 
 describe("collectRoutePaths", () => {

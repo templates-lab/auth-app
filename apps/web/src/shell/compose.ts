@@ -1,4 +1,9 @@
-import { DEFAULT_NAV_ORDER, type FeatureModule, type NavItem } from "@auth-app/feature-kit";
+import {
+  DEFAULT_NAV_ORDER,
+  isRoleAllowed,
+  type FeatureModule,
+  type NavItem,
+} from "@auth-app/feature-kit";
 import type { RouteDefinition } from "@solidjs/router";
 
 /**
@@ -7,9 +12,11 @@ import type { RouteDefinition } from "@solidjs/router";
  * the only place navigation is assembled, so a new feature appears in the menu
  * purely by being registered — no shell markup changes.
  */
-export function collectNav(features: FeatureModule[]): NavItem[] {
+export function collectNav(features: FeatureModule[], userRole?: string): NavItem[] {
   return features
+    .filter((feature) => !userRole || isRoleAllowed(userRole, feature.roles))
     .flatMap((feature) => feature.nav ?? [])
+    .filter((item) => !userRole || isRoleAllowed(userRole, item.roles))
     .map((item, index) => ({ item, index }))
     .sort((a, b) => {
       const byOrder = (a.item.order ?? DEFAULT_NAV_ORDER) - (b.item.order ?? DEFAULT_NAV_ORDER);

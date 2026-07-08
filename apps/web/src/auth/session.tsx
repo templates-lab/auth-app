@@ -1,23 +1,12 @@
-import { createContext, Show, useContext, type JSX, type ParentProps } from "solid-js";
+import { Show, type JSX, type ParentProps } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { isUnauthorized } from "@auth-app/query";
+import { SessionContext, useSession, useHasRole } from "@auth-app/feature-kit";
 import { getMe, meKey, type Me } from "./api";
 
-/** The authenticated admin, provided to everything under {@link RequireSession}. */
-const SessionContext = createContext<() => Me>();
-
-/**
- * The current admin's identity (id + role). Throws if used outside a
- * {@link RequireSession} subtree — a programming error, since the guard
- * guarantees a session before rendering its children.
- */
-export function useSession(): Me {
-  const session = useContext(SessionContext);
-  if (!session) {
-    throw new Error("useSession must be used within <RequireSession>");
-  }
-  return session();
-}
+// Re-export so existing shell imports keep working.
+export { useSession, useHasRole };
+export type { Me };
 
 /**
  * Gate a subtree behind a valid session (AC: admin routes inaccessible without

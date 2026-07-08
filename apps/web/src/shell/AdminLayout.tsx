@@ -25,9 +25,9 @@ function avatarInitial(role: string): string {
  */
 export function AdminLayout(props: ParentProps) {
   const [navOpen, setNavOpen] = createSignal(false);
-  const nav = collectNav(features);
-  const closeNav = () => setNavOpen(false);
   const session = useSession();
+  const nav = collectNav(features, session.role);
+  const closeNav = () => setNavOpen(false);
 
   // Sign out server-side, then hard-redirect to login. The full reload clears
   // every cached query so no authenticated data lingers after logout.
