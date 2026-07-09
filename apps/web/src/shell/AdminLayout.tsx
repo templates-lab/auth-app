@@ -1,5 +1,5 @@
-import { createSignal, For, Show, type ParentProps } from "solid-js";
-import { A } from "@solidjs/router";
+import { createSignal, onCleanup, For, Show, type ParentProps } from "solid-js";
+import { A, useNavigate } from "@solidjs/router";
 import { collectNav } from "./compose";
 import { features } from "./registry";
 import { useSession } from "../auth/session";
@@ -11,6 +11,14 @@ const APP_NAME = "Auth App";
 function avatarInitial(role: string): string {
   return (role[0] ?? "?").toUpperCase();
 }
+
+/** Profile menu items that link to settings sub-routes. */
+const PROFILE_MENU = [
+  { icon: "\u26BF", label: "Passwords & security", path: "/settings/security" },
+  { icon: "\u25C9", label: "Manage account", path: "/settings/account" },
+  { icon: "\u270E", label: "Customize profile", path: "/settings/profile" },
+  { icon: "\u25D4", label: "Preferences", path: "/settings/preferences" },
+];
 
 /**
  * The responsive admin chrome: a sidebar of feature navigation, a top header
@@ -25,15 +33,57 @@ function avatarInitial(role: string): string {
  */
 export function AdminLayout(props: ParentProps) {
   const [navOpen, setNavOpen] = createSignal(false);
+  const [profileOpen, setProfileOpen] = createSignal(false);
   const session = useSession();
   const nav = collectNav(features, session.role);
+  const navigate = useNavigate();
   const closeNav = () => setNavOpen(false);
+
+  const displayName = () => session.display_name ?? session.role;
+  const email = () => session.email ?? "";
 
   // Sign out server-side, then hard-redirect to login. The full reload clears
   // every cached query so no authenticated data lingers after logout.
   const signOut = async () => {
     await logout().catch(() => undefined);
     window.location.assign("/login");
+  };
+
+  // Close profile popover on click-outside or ESC.
+  let profileRef: HTMLDivElement | undefined;
+
+  const handleClickOutside = (e: MouseEvent) => {
+    if (profileRef && !profileRef.contains(e.target as Node)) {
+      setProfileOpen(false);
+    }
+  };
+
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === "Escape") setProfileOpen(false);
+  };
+
+  // Attach/detach listeners based on popover state.
+  const startListening = () => {
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEsc);
+  };
+  const stopListening = () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+    document.removeEventListener("keydown", handleEsc);
+  };
+  onCleanup(stopListening);
+
+  const toggleProfile = () => {
+    const next = !profileOpen();
+    setProfileOpen(next);
+    if (next) startListening();
+    else stopListening();
+  };
+
+  const navigateTo = (path: string) => {
+    setProfileOpen(false);
+    stopListening();
+    navigate(path);
   };
 
   return (
@@ -83,14 +133,66 @@ export function AdminLayout(props: ParentProps) {
             ☰
           </button>
           <div class="topbar__spacer" />
-          <div class="topbar__user">
-            <span class="avatar" aria-hidden="true">
-              {avatarInitial(session.role)}
-            </span>
-            <span class="topbar__user-name">{session.role}</span>
-            <button class="topbar__signout" type="button" onClick={() => void signOut()}>
-              Sign out
+
+          {/* Profile trigger + popover */}
+          <div class="profile-wrapper" ref={profileRef}>
+            <button
+              class="profile-trigger"
+              type="button"
+              aria-expanded={profileOpen()}
+              aria-haspopup="true"
+              onClick={toggleProfile}
+            >
+              <span class="avatar" aria-hidden="true">
+                {avatarInitial(session.role)}
+              </span>
+              <span class="topbar__user-name">{displayName()}</span>
             </button>
+
+            <Show when={profileOpen()}>
+              <div class="profile-popover" role="menu">
+                <div class="profile-card">
+                  <span class="profile-card__avatar" aria-hidden="true">
+                    {avatarInitial(session.role)}
+                  </span>
+                  <div class="profile-card__info">
+                    <span class="profile-card__name">{displayName()}</span>
+                    <Show when={email()}>
+                      <span class="profile-card__email">{email()}</span>
+                    </Show>
+                    <span class="profile-card__role">{session.role}</span>
+                  </div>
+                </div>
+
+                <div class="profile-menu__divider" />
+
+                <nav class="profile-menu">
+                  {PROFILE_MENU.map((item) => (
+                    <button
+                      class="profile-menu__item"
+                      type="button"
+                      role="menuitem"
+                      onClick={() => navigateTo(item.path)}
+                    >
+                      <span class="profile-menu__icon">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </nav>
+
+                <div class="profile-menu__divider" />
+
+                <button
+                  class="profile-menu__item profile-menu__item--danger"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void signOut()}
+                >
+                  <span class="profile-menu__icon">⎋</span>
+                  <span>Sign out</span>
+                </button>
+              </div>
+            </Show>
           </div>
         </header>
         <main class="content">{props.children}</main>

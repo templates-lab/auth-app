@@ -85,6 +85,8 @@ export function isRoleAllowed(userRole: string, allowedRoles?: string[]): boolea
 export interface Session {
   admin_id: string;
   role: string;
+  email?: string;
+  display_name?: string | null;
 }
 
 /**

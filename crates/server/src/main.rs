@@ -128,8 +128,9 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     // connectivity; the login service verifies admin credentials with argon2id,
     // constant-time equalization, and progressive account/IP lockout.
     let health = HealthService::new(Arc::new(PgHealthCheck::new(pool.clone())));
+    let admins: Arc<dyn domain::AdminRepository> = Arc::new(PgAdminRepository::new(pool.clone()));
     let login = LoginService::new(
-        Arc::new(PgAdminRepository::new(pool.clone())),
+        admins.clone(),
         Arc::new(PgIpLockoutStore::new(pool.clone())),
         Arc::new(Argon2Hasher::new(auth.argon2)?),
         Arc::new(SystemClock),
@@ -215,6 +216,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         login,
         sessions,
         audit,
+        admins,
         oauth,
         webhooks,
         transactions,

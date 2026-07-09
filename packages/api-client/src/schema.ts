@@ -82,11 +82,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Handle `GET /auth/me`: report the authenticated admin's id and role, so
-         *     frontend guards can hide routes/actions the role does not permit without
-         *     a separate round trip. Any authenticated role may call this — it is not
-         *     itself role-gated (see [`crate::rbac::require_role`] for endpoints that
-         *     are).
+         * Handle `GET /auth/me`: report the authenticated admin's identity and
+         *     profile fields, so the frontend can display them without a separate round
+         *     trip. Any authenticated role may call this — it is not itself role-gated
+         *     (see [`crate::rbac::require_role`] for endpoints that are).
          */
         get: operations["me_handler"];
         put?: never;
@@ -281,11 +280,15 @@ export interface components {
         };
         /**
          * @description The body `GET /auth/me` returns: enough for the frontend to know who is
-         *     logged in and which role's guards to apply.
+         *     logged in and which role's guards to apply, plus profile fields for the UI.
          */
         MeOut: {
             /** @description The authenticated administrator's opaque id. */
             admin_id: string;
+            /** @description An optional display name for the profile UI. */
+            display_name?: string | null;
+            /** @description The administrator's email address. */
+            email: string;
             /** @description The administrator's role (e.g. `admin`). */
             role: string;
         };
@@ -530,7 +533,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The authenticated admin's id and role */
+            /** @description The authenticated admin's identity and profile */
             200: {
                 headers: {
                     [name: string]: unknown;

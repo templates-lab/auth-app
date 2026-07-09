@@ -177,11 +177,11 @@
         "tags": [
           "auth"
         ],
-        "summary": "Handle `GET /auth/me`: report the authenticated admin's id and role, so\nfrontend guards can hide routes/actions the role does not permit without\na separate round trip. Any authenticated role may call this — it is not\nitself role-gated (see [`crate::rbac::require_role`] for endpoints that\nare).",
+        "summary": "Handle `GET /auth/me`: report the authenticated admin's identity and\nprofile fields, so the frontend can display them without a separate round\ntrip. Any authenticated role may call this — it is not itself role-gated\n(see [`crate::rbac::require_role`] for endpoints that are).",
         "operationId": "me_handler",
         "responses": {
           "200": {
-            "description": "The authenticated admin's id and role",
+            "description": "The authenticated admin's identity and profile",
             "content": {
               "application/json": {
                 "schema": {
@@ -641,15 +641,27 @@
       },
       "MeOut": {
         "type": "object",
-        "description": "The body `GET /auth/me` returns: enough for the frontend to know who is\nlogged in and which role's guards to apply.",
+        "description": "The body `GET /auth/me` returns: enough for the frontend to know who is\nlogged in and which role's guards to apply, plus profile fields for the UI.",
         "required": [
           "admin_id",
-          "role"
+          "role",
+          "email"
         ],
         "properties": {
           "admin_id": {
             "type": "string",
             "description": "The authenticated administrator's opaque id."
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An optional display name for the profile UI."
+          },
+          "email": {
+            "type": "string",
+            "description": "The administrator's email address."
           },
           "role": {
             "type": "string",

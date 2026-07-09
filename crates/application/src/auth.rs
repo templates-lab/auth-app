@@ -412,6 +412,15 @@ mod tests {
                 .find(|a| &a.email == email)
                 .cloned())
         }
+        async fn find_by_id(&self, id: &AdminId) -> Result<Option<AdminAccount>, RepositoryError> {
+            Ok(self
+                .accounts
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|a| &a.id == id)
+                .cloned())
+        }
         async fn update_lockout(
             &self,
             id: &AdminId,
@@ -439,6 +448,7 @@ mod tests {
                 password_hash: admin.password_hash.clone(),
                 lockout: LockoutState::clear(),
                 role: admin.role.clone(),
+                display_name: None,
             });
             Ok(id)
         }
@@ -481,6 +491,7 @@ mod tests {
             password_hash: PasswordHash::from_encoded(format!("hash:{password}")),
             lockout: LockoutState::clear(),
             role: Role::admin(),
+            display_name: None,
         });
     }
 

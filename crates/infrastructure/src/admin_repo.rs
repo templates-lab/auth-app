@@ -42,6 +42,34 @@ fn backend(err: sqlx::Error) -> RepositoryError {
     RepositoryError::Backend(err.to_string())
 }
 
+/// Map a row from `admin_users` into an [`AdminAccount`].
+fn row_to_account(row: &sqlx::postgres::PgRow) -> Result<Option<AdminAccount>, RepositoryError> {
+    let id: String = row.try_get("id").map_err(backend)?;
+    let email_str: String = row.try_get("email").map_err(backend)?;
+    let password_hash: String = row.try_get("password_hash").map_err(backend)?;
+    let failed_attempts: i32 = row.try_get("failed_attempts").map_err(backend)?;
+    let role: String = row.try_get("role").map_err(backend)?;
+    let display_name: Option<String> = row.try_get("display_name").map_err(backend)?;
+    let locked_epoch: Option<i64> = row.try_get("locked_until_epoch").map_err(backend)?;
+
+    let email = Email::parse(&email_str)
+        .map_err(|e| RepositoryError::Backend(format!("stored email {email_str:?}: {e}")))?;
+    let role = Role::parse(&role)
+        .map_err(|e| RepositoryError::Backend(format!("stored role {role:?}: {e}")))?;
+
+    Ok(Some(AdminAccount {
+        id: AdminId::new(id),
+        email,
+        password_hash: PasswordHash::from_encoded(password_hash),
+        lockout: LockoutState {
+            failed_attempts: failed_attempts.max(0) as u32,
+            locked_until: locked_epoch.map(from_epoch),
+        },
+        role,
+        display_name,
+    }))
+}
+
 /// A Postgres-backed [`AdminRepository`].
 #[derive(Debug, Clone)]
 pub struct PgAdminRepository {
@@ -59,7 +87,7 @@ impl PgAdminRepository {
 impl AdminRepository for PgAdminRepository {
     async fn find_by_email(&self, email: &Email) -> Result<Option<AdminAccount>, RepositoryError> {
         let row = sqlx::query(
-            "SELECT id::text AS id, email, password_hash, failed_attempts, role, \
+            "SELECT id::text AS id, email, password_hash, failed_attempts, role, display_name, \
              EXTRACT(EPOCH FROM locked_until)::bigint AS locked_until_epoch \
              FROM admin_users WHERE email = $1",
         )
@@ -72,31 +100,25 @@ impl AdminRepository for PgAdminRepository {
             return Ok(None);
         };
 
-        let id: String = row.try_get("id").map_err(backend)?;
-        let email_str: String = row.try_get("email").map_err(backend)?;
-        let password_hash: String = row.try_get("password_hash").map_err(backend)?;
-        let failed_attempts: i32 = row.try_get("failed_attempts").map_err(backend)?;
-        let role: String = row.try_get("role").map_err(backend)?;
-        let locked_epoch: Option<i64> = row.try_get("locked_until_epoch").map_err(backend)?;
+        row_to_account(&row)
+    }
 
-        // The stored email was normalized on write, so parsing is expected to
-        // succeed; a stored value that no longer parses is a data-integrity fault
-        // surfaced as a backend error rather than silently dropped.
-        let email = Email::parse(&email_str)
-            .map_err(|e| RepositoryError::Backend(format!("stored email {email_str:?}: {e}")))?;
-        let role = Role::parse(&role)
-            .map_err(|e| RepositoryError::Backend(format!("stored role {role:?}: {e}")))?;
+    async fn find_by_id(&self, id: &AdminId) -> Result<Option<AdminAccount>, RepositoryError> {
+        let row = sqlx::query(
+            "SELECT id::text AS id, email, password_hash, failed_attempts, role, display_name, \
+             EXTRACT(EPOCH FROM locked_until)::bigint AS locked_until_epoch \
+             FROM admin_users WHERE id = $1::uuid",
+        )
+        .bind(id.as_str())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(backend)?;
 
-        Ok(Some(AdminAccount {
-            id: AdminId::new(id),
-            email,
-            password_hash: PasswordHash::from_encoded(password_hash),
-            lockout: LockoutState {
-                failed_attempts: failed_attempts.max(0) as u32,
-                locked_until: locked_epoch.map(from_epoch),
-            },
-            role,
-        }))
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        row_to_account(&row)
     }
 
     async fn update_lockout(

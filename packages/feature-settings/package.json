@@ -1,0 +1,28 @@
+{
+  "name": "@auth-app/feature-settings",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.tsx",
+      "solid": "./src/index.tsx",
+      "import": "./src/index.tsx"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@auth-app/feature-kit": "workspace:*"
+  },
+  "peerDependencies": {
+    "@solidjs/router": "^0.15.0",
+    "solid-js": "^1.9.0"
+  },
+  "devDependencies": {
+    "@solidjs/router": "^0.15.3",
+    "solid-js": "^1.9.5"
+  }
+}

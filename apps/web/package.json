@@ -14,6 +14,7 @@
     "@auth-app/feature-dashboard": "workspace:*",
     "@auth-app/feature-kit": "workspace:*",
     "@auth-app/api-client": "workspace:*",
+    "@auth-app/feature-settings": "workspace:*",
     "@auth-app/feature-transactions": "workspace:*",
     "@auth-app/feature-users": "workspace:*",
     "@auth-app/query": "workspace:*",

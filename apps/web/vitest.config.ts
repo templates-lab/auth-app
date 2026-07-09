@@ -24,6 +24,9 @@ export default defineConfig({
       "@auth-app/shared": fileURLToPath(
         new URL("../../packages/shared/src/index.ts", import.meta.url),
       ),
+      "@auth-app/feature-settings": fileURLToPath(
+        new URL("../../packages/feature-settings/src/index.tsx", import.meta.url),
+      ),
     },
   },
 });

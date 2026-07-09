@@ -386,6 +386,8 @@ pub struct AdminAccount {
     pub lockout: LockoutState,
     /// The account's role.
     pub role: Role,
+    /// An optional display name for the profile UI.
+    pub display_name: Option<String>,
 }
 
 /// An opaque administrator identifier.
@@ -471,6 +473,9 @@ impl std::error::Error for PasswordHashError {}
 pub trait AdminRepository: Send + Sync {
     /// Find an account by its normalized email, if one exists.
     async fn find_by_email(&self, email: &Email) -> Result<Option<AdminAccount>, RepositoryError>;
+
+    /// Find an account by its opaque id, if one exists.
+    async fn find_by_id(&self, id: &AdminId) -> Result<Option<AdminAccount>, RepositoryError>;
 
     /// Overwrite an account's lockout counters.
     async fn update_lockout(

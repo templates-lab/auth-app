@@ -4,12 +4,14 @@
 //! translates HTTP requests into application calls and back; it holds no
 //! business logic and no storage concerns.
 
+use std::sync::Arc;
+
 use application::{
     AuditService, HealthService, LoginService, OAuthLoginService, PaymentsService, SessionService,
     WebhookService,
 };
 use axum::{extract::State, http::StatusCode, routing::get, Router};
-use domain::Readiness;
+use domain::{AdminRepository, Readiness};
 
 pub mod audit;
 pub mod auth;
@@ -48,6 +50,7 @@ pub fn router(
     login: LoginService,
     sessions: SessionService,
     audit: AuditService,
+    admins: Arc<dyn AdminRepository>,
     oauth: Option<(OAuthLoginService, OAuthRedirects)>,
     webhooks: Option<WebhookService>,
     transactions: Option<PaymentsService>,
@@ -62,7 +65,7 @@ pub fn router(
             audit.clone(),
             login_rate_limit,
         ))
-        .merge(session::routes(sessions.clone(), audit.clone()))
+        .merge(session::routes(sessions.clone(), audit.clone(), admins))
         .merge(audit::routes(audit.clone(), sessions.clone()));
     if let Some((oauth, redirects)) = oauth {
         router = router.merge(oauth::routes(oauth, sessions.clone(), audit, redirects));

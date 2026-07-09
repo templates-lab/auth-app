@@ -8,6 +8,8 @@
 
 use std::time::SystemTime;
 
+use std::sync::Arc;
+
 use application::{AuditService, IssuedSession, SessionError, SessionService};
 use axum::extract::{Request, State};
 use axum::http::{header, HeaderMap, Method, StatusCode};
@@ -16,7 +18,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use domain::{AdminId, AuditEventType, NewAuditEvent, Role, SessionToken};
+use domain::{AdminId, AdminRepository, AuditEventType, NewAuditEvent, Role, SessionToken};
 use serde::Serialize;
 use time::OffsetDateTime;
 
@@ -31,24 +33,30 @@ pub const CSRF_COOKIE: &str = "csrf";
 /// The request header a mutating call must echo the CSRF cookie's value into.
 pub const CSRF_HEADER: &str = "x-csrf-token";
 
-/// State for the logout route: the session service it revokes through, and
-/// the audit trail it records the logout to.
+/// State for the session-protected routes: the session service (logout +
+/// auth middleware), the audit trail (logout), and the admin repository (me).
 #[derive(Clone)]
-pub(crate) struct LogoutState {
+pub(crate) struct SessionRouteState {
     sessions: SessionService,
     audit: AuditService,
+    admins: Arc<dyn AdminRepository>,
 }
 
 /// Mount the routes that require an authenticated session: `/auth/me` (any
 /// role) and `/auth/logout`. Future protected mutations mount alongside these
 /// the same way.
-pub fn routes(sessions: SessionService, audit: AuditService) -> Router {
+pub fn routes(
+    sessions: SessionService,
+    audit: AuditService,
+    admins: Arc<dyn AdminRepository>,
+) -> Router {
     Router::new()
         .route("/auth/logout", post(logout_handler))
         .route("/auth/me", get(me_handler))
-        .with_state(LogoutState {
+        .with_state(SessionRouteState {
             sessions: sessions.clone(),
             audit,
+            admins,
         })
         .layer(axum::middleware::from_fn_with_state(
             sessions,
@@ -188,33 +196,49 @@ fn to_offset_date_time(time: SystemTime) -> OffsetDateTime {
 }
 
 /// The body `GET /auth/me` returns: enough for the frontend to know who is
-/// logged in and which role's guards to apply.
+/// logged in and which role's guards to apply, plus profile fields for the UI.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct MeOut {
     /// The authenticated administrator's opaque id.
     admin_id: String,
     /// The administrator's role (e.g. `admin`).
     role: String,
+    /// The administrator's email address.
+    email: String,
+    /// An optional display name for the profile UI.
+    display_name: Option<String>,
 }
 
-/// Handle `GET /auth/me`: report the authenticated admin's id and role, so
-/// frontend guards can hide routes/actions the role does not permit without
-/// a separate round trip. Any authenticated role may call this — it is not
-/// itself role-gated (see [`crate::rbac::require_role`] for endpoints that
-/// are).
+/// Handle `GET /auth/me`: report the authenticated admin's identity and
+/// profile fields, so the frontend can display them without a separate round
+/// trip. Any authenticated role may call this — it is not itself role-gated
+/// (see [`crate::rbac::require_role`] for endpoints that are).
 #[utoipa::path(
     get,
     path = "/auth/me",
     responses(
-        (status = 200, description = "The authenticated admin's id and role", body = MeOut),
+        (status = 200, description = "The authenticated admin's identity and profile", body = MeOut),
         (status = 401, description = "No valid session"),
     ),
     tag = "auth",
 )]
-pub(crate) async fn me_handler(current: axum::Extension<CurrentSession>) -> impl IntoResponse {
+pub(crate) async fn me_handler(
+    State(state): State<SessionRouteState>,
+    current: axum::Extension<CurrentSession>,
+) -> impl IntoResponse {
+    let admin_id = AdminId::new(&current.0.admin_id);
+    let account = state.admins.find_by_id(&admin_id).await;
+
+    let (email, display_name) = match account {
+        Ok(Some(a)) => (a.email.to_string(), a.display_name),
+        _ => (String::new(), None),
+    };
+
     Json(MeOut {
         admin_id: current.0.admin_id.clone(),
         role: current.0.role.as_str().to_string(),
+        email,
+        display_name,
     })
 }
 
@@ -233,7 +257,7 @@ pub(crate) async fn me_handler(current: axum::Extension<CurrentSession>) -> impl
     tag = "auth",
 )]
 pub(crate) async fn logout_handler(
-    State(state): State<LogoutState>,
+    State(state): State<SessionRouteState>,
     current: axum::Extension<CurrentSession>,
     ClientIp(client_ip): ClientIp,
     headers: HeaderMap,

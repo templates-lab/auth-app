@@ -358,6 +358,15 @@ mod tests {
                 .find(|a| &a.email == email)
                 .cloned())
         }
+        async fn find_by_id(&self, id: &AdminId) -> Result<Option<AdminAccount>, RepositoryError> {
+            Ok(self
+                .accounts
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|a| &a.id == id)
+                .cloned())
+        }
         async fn update_lockout(
             &self,
             _id: &AdminId,
@@ -401,6 +410,7 @@ mod tests {
             password_hash: PasswordHash::from_encoded("x"),
             lockout: LockoutState::clear(),
             role,
+            display_name: None,
         });
         id
     }
