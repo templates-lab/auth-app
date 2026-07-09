@@ -34,6 +34,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./traefik.yml:/etc/traefik/traefik.yml:ro"
       - "./dynamic:/etc/traefik/dynamic:ro"
+      - "./certs:/etc/traefik/certs:ro"
       - "letsencrypt:/letsencrypt"
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]

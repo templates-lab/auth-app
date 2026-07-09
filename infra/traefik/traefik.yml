@@ -55,7 +55,7 @@ certificatesResolvers:
     acme:
       # Placeholder; overridden at runtime by
       # TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL (see compose).
-      email: "admin@example.com"
+      email: "codecsrayo@gmail.com"
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web

@@ -26,6 +26,9 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 
+# TLS certificates (generate locally, never commit)
+infra/traefik/certs/
+
 # Environment / secrets
 .env
 .env.*
