@@ -8,7 +8,7 @@
 //! id). One id, visible in the logs, the response header, and the error body.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue};
@@ -66,8 +66,36 @@ pub async fn request_context(request: Request, next: Next) -> Response {
     // structured completion line per request — carrying the span's `request_id`,
     // so every request produces a JSON log tied to the id the client sees.
     let served = async move {
+        let start = Instant::now();
         let response = next.run(request).await;
-        tracing::info!(status = response.status().as_u16(), "request completed");
+        let elapsed = start.elapsed();
+        let status = response.status().as_u16();
+        let content_length = response
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+        let duration_ms = elapsed.as_secs_f64() * 1000.0;
+
+        match status {
+            200..=299 => tracing::info!(
+                status,
+                duration_ms = format_args!("{duration_ms:.2}"),
+                bytes = content_length.unwrap_or(0),
+                "request completed",
+            ),
+            400..=499 => tracing::warn!(
+                status,
+                duration_ms = format_args!("{duration_ms:.2}"),
+                "client error",
+            ),
+            _ => tracing::error!(
+                status,
+                duration_ms = format_args!("{duration_ms:.2}"),
+                "server error",
+            ),
+        }
+
         response
     };
     let mut response = REQUEST_ID.scope(id.clone(), served.instrument(span)).await;

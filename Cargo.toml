@@ -59,7 +59,7 @@ async-trait = "0.1"
 tracing = "0.1"
 # The subscriber the composition root installs: JSON output and an env-driven
 # level filter (`RUST_LOG`). Only the binary depends on it.
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "ansi"] }
 # Password hashing. Argon2id is the OWASP-recommended algorithm for password
 # storage; the `argon2` crate pulls in the RustCrypto `password-hash` (PHC
 # string) machinery so parameters and salt travel embedded in the encoded hash.

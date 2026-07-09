@@ -76,18 +76,35 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-/// Install the tracing subscriber: JSON-formatted, structured log events, with
-/// the level filtered by the `RUST_LOG` environment variable (default `info`).
-/// Called once at the start of a long-running command; the `openapi` subcommand
-/// deliberately skips it so its stdout carries only the spec.
+/// Install the tracing subscriber, filtered by the `RUST_LOG` environment
+/// variable (default `info`). Called once at the start of a long-running
+/// command; the `openapi` subcommand deliberately skips it so its stdout
+/// carries only the spec.
+///
+/// The output format is chosen by `LOG_FORMAT`:
+///   - `pretty` — human-readable, colored output for local development.
+///   - `json` (the default) — structured JSON for production log aggregators.
 fn init_tracing() {
     use tracing_subscriber::{fmt, EnvFilter};
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    fmt()
-        .json()
-        .with_current_span(true)
-        .with_env_filter(filter)
-        .init();
+    let is_pretty = std::env::var("LOG_FORMAT")
+        .map(|v| v.eq_ignore_ascii_case("pretty"))
+        .unwrap_or(false);
+
+    if is_pretty {
+        fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_thread_ids(false)
+            .with_ansi(true)
+            .init();
+    } else {
+        fmt()
+            .json()
+            .with_current_span(true)
+            .with_env_filter(filter)
+            .init();
+    }
 }
 
 /// Run the HTTP server (the default command).

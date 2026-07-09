@@ -14,10 +14,12 @@ services:
       - "127.0.0.1:5432:5432"
 
   # Publish the API directly on the loopback too, so a developer can hit it
-  # without going through Traefik/TLS.
+  # without going through Traefik/TLS. Pretty-printed, colored logs in dev.
   api:
     ports:
       - "127.0.0.1:8080:8080"
+    environment:
+      LOG_FORMAT: pretty
 
   # One-shot: create the first administrator from env, then exit. Runs once the
   # database is healthy; `restart: no` so it does not loop after completing.
