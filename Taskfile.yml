@@ -1,0 +1,92 @@
+# https://taskfile.dev
+version: "3"
+
+vars:
+  DC: docker compose
+
+tasks:
+  # ---------------------------------------------------------------------------
+  # Dev
+  # ---------------------------------------------------------------------------
+  dev:
+    desc: Start the full dev stack (build + bootstrap)
+    cmds:
+      - "{{.DC}} --profile dev up -d --build"
+
+  dev:logs:
+    desc: Follow all dev logs
+    cmds:
+      - "{{.DC}} --profile dev logs -f"
+
+  dev:logs:api:
+    desc: Follow API logs only
+    cmds:
+      - "{{.DC}} logs -f api"
+
+  down:
+    desc: Stop and remove all containers
+    cmds:
+      - "{{.DC}} -p auth-app down"
+
+  restart:
+    desc: Restart the dev stack (down + up)
+    cmds:
+      - task: down
+      - task: dev
+
+  # ---------------------------------------------------------------------------
+  # Build
+  # ---------------------------------------------------------------------------
+  build:
+    desc: Build all images
+    cmds:
+      - "{{.DC}} build"
+
+  build:api:
+    desc: Build only the API image
+    cmds:
+      - "{{.DC}} build api"
+
+  build:web:
+    desc: Build only the web image
+    cmds:
+      - "{{.DC}} build web"
+
+  build:clean:
+    desc: Build all images without cache
+    cmds:
+      - "{{.DC}} build --no-cache"
+
+  # ---------------------------------------------------------------------------
+  # Status
+  # ---------------------------------------------------------------------------
+  ps:
+    desc: Show running containers
+    cmds:
+      - "{{.DC}} ps"
+
+  # ---------------------------------------------------------------------------
+  # Database
+  # ---------------------------------------------------------------------------
+  db:shell:
+    desc: Open a psql shell into the dev database
+    cmds:
+      - "{{.DC}} exec postgres psql -U ${APP_DB_USER:-authapp_app} -d ${POSTGRES_DB:-authapp}"
+
+  db:logs:
+    desc: Follow Postgres logs
+    cmds:
+      - "{{.DC}} logs -f postgres"
+
+  # ---------------------------------------------------------------------------
+  # Production
+  # ---------------------------------------------------------------------------
+  prod:
+    desc: Start the production stack
+    cmds:
+      - "{{.DC}} -f compose.yml -f compose.prod.yml --profile prod up -d"
+
+  prod:down:
+    desc: Stop the production stack
+    cmds:
+      - "{{.DC}} -f compose.yml -f compose.prod.yml --profile prod down"
