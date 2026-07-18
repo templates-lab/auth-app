@@ -1,0 +1,94 @@
+/* Shared UI primitives for feature packages: buttons, modal, confirm dialog.
+ * Themed through the app's design tokens with neutral fallbacks. */
+
+.fk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--color-border, #d0d5dd);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #101828);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.fk-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fk-btn--danger {
+  border-color: var(--color-danger, #d92d20);
+  color: var(--color-danger, #d92d20);
+}
+
+.fk-btn--sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.fk-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+}
+
+.fk-modal {
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #101828);
+  border-radius: var(--radius-md, 10px);
+  width: 100%;
+  max-width: 56rem;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.fk-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border, #d0d5dd);
+}
+
+.fk-modal__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.fk-modal__body {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.fk-confirm__message {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.fk-confirm__icon {
+  flex-shrink: 0;
+  color: var(--color-danger, #d92d20);
+  margin-top: 0.1rem;
+}
+
+.fk-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

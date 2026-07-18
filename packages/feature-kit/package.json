@@ -10,10 +10,16 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./src/ui/index.tsx",
+      "solid": "./src/ui/index.tsx",
+      "import": "./src/ui/index.tsx"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src/ui"
   ],
   "scripts": {
     "dev": "tsc -p tsconfig.json --watch",
@@ -22,7 +28,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@auth-app/shared": "workspace:*"
+    "@auth-app/shared": "workspace:*",
+    "lucide-solid": "^1.25.0"
   },
   "peerDependencies": {
     "@solidjs/router": "^0.15.0",
